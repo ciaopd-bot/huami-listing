@@ -381,7 +381,7 @@ input.field-error::placeholder{color:#C9826B}
 
   <!-- Top nav -->
   <nav class="app-nav">
-    <div class="nav-logo">🌸 huami 開團工具<span id="nav-teamname" style="color:var(--rose);margin-left:6px">｜花開未滿團</span></div>
+    <div class="nav-logo" onclick="goHome()" style="cursor:pointer;user-select:none" title="回首頁">🌸 huami 開團工具<span id="nav-teamname" style="color:var(--rose);margin-left:6px">｜花開未滿團</span></div>
     <div class="nav-tabs">
       <div class="nav-tab active" onclick="switchPage('listing')">上架文產生</div>
       <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
@@ -634,31 +634,22 @@ EX：+1
                 <button class="btn-copy-all" id="copyAllBtn" onclick="copyAll()">📋 複製全文</button>
               </div>
             </div>
-            <div class="result-card">
-              <div class="result-field">
-                <div class="rf-label">標題行 <span class="rf-copy" onclick="copyFieldTA('rf-title-ta')">複製</span></div>
-                <textarea class="rf-editable" id="rf-title-ta" rows="2" style="font-weight:500" oninput="syncTitleToIntro()"></textarea>
-              </div>
-              <div class="result-field">
-                <div class="rf-label">
-                  <span>商品介紹</span>
-                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                    <span id="rf-char" style="font-size:11px;color:var(--ink-light)"></span>
-                    <button class="btn-save-style" id="saveStyleBtn" onclick="saveFromResult()">+ 存入文風庫</button>
-                    <span class="rf-copy" onclick="copyFieldTA('rf-intro')">複製</span>
-                  </div>
-                </div>
-                <textarea class="rf-editable" id="rf-intro" rows="8" oninput="onIntroEdit()"></textarea>
-              </div>
-              <div class="result-field">
-                <div class="rf-label">容量 &amp; 訂購資訊 <span class="rf-copy" onclick="copyFieldTA('rf-spec')">複製</span></div>
-                <textarea class="rf-editable" id="rf-spec" rows="6"></textarea>
-              </div>
-              <div class="result-field">
-                <div class="rf-label">底部說明 <span class="rf-copy" onclick="copyFieldTA('rf-notes')">複製</span></div>
-                <textarea class="rf-editable" id="rf-notes" rows="8"></textarea>
+            <!-- Hidden fields for internal sync -->
+            <textarea id="rf-title-ta" style="display:none" oninput="syncTitleToIntro()"></textarea>
+            <textarea id="rf-intro" style="display:none" oninput="onIntroEdit()"></textarea>
+            <textarea id="rf-spec" style="display:none"></textarea>
+            <textarea id="rf-notes" style="display:none"></textarea>
+            <span id="rf-char" style="display:none"></span>
+
+            <!-- Single unified editable textarea -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+              <div style="font-size:12px;color:var(--ink-light)">可直接在下方編輯，編輯完按「複製全文」</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <span id="unified-char" style="font-size:11px;color:var(--ink-light)"></span>
+                <button class="btn-save-style" id="saveStyleBtn" onclick="saveFromResult()">+ 存入文風庫</button>
               </div>
             </div>
+            <textarea id="unifiedPost" style="width:100%;min-height:480px;border:1px solid var(--border);border-radius:12px;padding:1.25rem;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);line-height:1.9;resize:vertical;outline:none;box-shadow:var(--shadow);background:var(--white)" oninput="onUnifiedEdit()" placeholder="上架文會顯示在這裡，可以直接編輯"></textarea>
 
             <div id="imgResultSection" style="display:none">
               <div class="main-section-label">搜尋到的商品圖片</div>
@@ -681,12 +672,16 @@ EX：+1
       <div class="order-left">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
           <div class="main-title">訂貨管理</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-dark btn-sm" onclick="showAddProductModal()">+ 新增商品</button>
-            <button class="btn btn-outline btn-sm" onclick="toggleSelectAllProducts()" id="selectAllBtn">☑ 全選</button>
-            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="deleteSelectedProducts()">🗑 刪除勾選</button>
-            <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空本次</button>
-            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="resetAllTotals()">清空累計</button>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+              <button class="btn btn-dark btn-sm" onclick="showAddProductModal()">+ 新增商品</button>
+              <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空本次</button>
+              <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="resetAllTotals()">清空累計</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+              <button class="btn btn-outline btn-sm" onclick="toggleSelectAllProducts()" id="selectAllBtn">☑ 全選</button>
+              <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="deleteSelectedProducts()">🗑 刪除勾選商品</button>
+            </div>
           </div>
         </div>
         <div class="notice notice-blue" style="margin-bottom:1rem">上架的商品統一在這裡管理。點 ＋／－ 填入各款式訂購數量，右側會即時統計，最後輸出成訂貨圖片給廠商。</div>
@@ -1090,6 +1085,14 @@ function getSettings() {
     mid: document.getElementById('cfg-mid').value.trim(),
     notes: document.getElementById('cfg-notes').value.trim()
   };
+}
+
+function goHome(){
+  // Switch to listing page and scroll to top
+  switchPage('listing');
+  switchInnerTab('upload');
+  document.querySelector('.sidebar-body')?.scrollTo(0,0);
+  document.querySelector('.main-area')?.scrollTo(0,0);
 }
 
 function updateNavTeamName(){
@@ -2485,14 +2488,8 @@ function loadHistory_item(id) {
   setTimeout(()=>{
     document.getElementById('emptyState').style.display='none';
     document.getElementById('resultPanel').style.display='block';
-    // Parse stored text back into fields
-    const lines=(item.fullText||'').split('\n');
-    document.getElementById('rf-title-ta').value=lines[0]||'';
-    const introEnd=lines.findIndex((l,i)=>i>0&&l.startsWith('【容量】'));
-    const notesStart=lines.findIndex(l=>l.startsWith('※'));
-    document.getElementById('rf-intro').value=lines.slice(1,introEnd>0?introEnd:lines.length).join('\n');
-    document.getElementById('rf-spec').value=introEnd>0?lines.slice(introEnd,notesStart>0?notesStart:lines.length).join('\n'):'';
-    document.getElementById('rf-notes').value=notesStart>0?lines.slice(notesStart).join('\n'):'';
+    document.getElementById('unifiedPost').value = item.fullText||'';
+    onUnifiedEdit(); updateUnifiedChar();
     showToast('已載入歷史文案，可在預覽區編輯後複製');
   },100);
 }
@@ -2607,6 +2604,7 @@ function nextProduct(){
   ['rf-title-ta','rf-intro','rf-spec','rf-notes'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.value='';
   });
+  const up=document.getElementById('unifiedPost');if(up)up.value='';
   document.getElementById('imgResultSection').style.display='none';
   document.getElementById('reviewSection').style.display='none';
   // Show empty state, scroll to top
