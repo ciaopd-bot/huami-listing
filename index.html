@@ -452,13 +452,14 @@ EX：+1
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn-regen" onclick="regenDesc()">↺ 重新產生</button>
                 <button class="btn-regen" style="border-color:#a8d4a8;color:#3a7a3a;background:var(--leaf-light)" onclick="showSendToOrderModal()">📦 加入訂貨清單</button>
+                <button class="btn-regen" style="border-color:var(--blue-border);color:var(--blue);background:var(--blue-light)" onclick="nextProduct()">＋ 下一個商品</button>
                 <button class="btn-copy-all" id="copyAllBtn" onclick="copyAll()">📋 複製全文</button>
               </div>
             </div>
             <div class="result-card">
               <div class="result-field">
-                <div class="rf-label">標題行 <span class="rf-copy" onclick="copyField('rf-title')">複製</span></div>
-                <div class="rf-content" id="rf-title"></div>
+                <div class="rf-label">標題行 <span class="rf-copy" onclick="copyFieldTA('rf-title-ta')">複製</span></div>
+                <textarea class="rf-editable" id="rf-title-ta" rows="2" style="font-weight:500"></textarea>
               </div>
               <div class="result-field">
                 <div class="rf-label">
@@ -472,16 +473,15 @@ EX：+1
                 <textarea class="rf-editable" id="rf-intro" rows="8" oninput="onIntroEdit()"></textarea>
               </div>
               <div class="result-field">
-                <div class="rf-label">容量 &amp; 訂購資訊 <span class="rf-copy" onclick="copyField('rf-spec')">複製</span></div>
-                <div class="rf-content" id="rf-spec"></div>
+                <div class="rf-label">容量 &amp; 訂購資訊 <span class="rf-copy" onclick="copyFieldTA('rf-spec')">複製</span></div>
+                <textarea class="rf-editable" id="rf-spec" rows="6"></textarea>
               </div>
               <div class="result-field">
-                <div class="rf-label">底部說明 <span class="rf-copy" onclick="copyField('rf-notes')">複製</span></div>
-                <div class="rf-content" id="rf-notes"></div>
+                <div class="rf-label">底部說明 <span class="rf-copy" onclick="copyFieldTA('rf-notes')">複製</span></div>
+                <textarea class="rf-editable" id="rf-notes" rows="8"></textarea>
               </div>
             </div>
-            <div class="preview-label">完整預覽（可直接編輯）</div>
-            <textarea class="preview-textarea" id="fullPreview"></textarea>
+
             <div id="imgResultSection" style="display:none">
               <div class="main-section-label">搜尋到的商品圖片</div>
               <div class="img-results" id="imgResultGrid"></div>
@@ -882,16 +882,30 @@ function handleFiles(files){
     r.readAsDataURL(f);
   });
 }
+let dragSrcIdx=null;
 function renderThumbs(){
   const g=document.getElementById('thumbGrid');
   if(!imgs.length){dz.style.display='block';g.style.display='none';g.innerHTML='';return;}
   dz.style.display='none';g.style.display='grid';g.innerHTML='';
-  imgs.forEach(img=>{
-    const d=document.createElement('div');d.className='thumb';
-    d.innerHTML=`<img src="${img.b64}"/><button class="thumb-rm" onclick="rmImg(${img.id})">✕</button>`;
+  imgs.forEach((img,i)=>{
+    const d=document.createElement('div');
+    d.className='thumb';d.draggable=true;d.style.cursor='grab';
+    d.dataset.idx=i;
+    d.innerHTML=`<img src="${img.b64}" draggable="false"/><button class="thumb-rm" onclick="rmImg(${img.id})">✕</button><div style="position:absolute;bottom:2px;left:3px;font-size:9px;color:#fff;background:rgba(0,0,0,0.4);border-radius:3px;padding:1px 4px">${i+1}</div>`;
+    d.addEventListener('dragstart',e=>{dragSrcIdx=i;d.style.opacity='0.4';});
+    d.addEventListener('dragend',e=>{d.style.opacity='1';renderThumbs();});
+    d.addEventListener('dragover',e=>{e.preventDefault();d.style.borderColor='var(--rose)';});
+    d.addEventListener('dragleave',e=>{d.style.borderColor='';});
+    d.addEventListener('drop',e=>{
+      e.preventDefault();d.style.borderColor='';
+      if(dragSrcIdx===null||dragSrcIdx===i)return;
+      const moved=imgs.splice(dragSrcIdx,1)[0];
+      imgs.splice(i,0,moved);
+      dragSrcIdx=null;renderThumbs();
+    });
     g.appendChild(d);
   });
-  if(imgs.length<10){const a=document.createElement('div');a.className='add-more';a.textContent='+';a.onclick=triggerUpload;g.appendChild(a);}
+  if(imgs.length<10){const a=document.createElement('div');a.className='add-more';a.textContent='+';a.title='新增更多照片';a.onclick=triggerUpload;g.appendChild(a);}
 }
 function rmImg(id){imgs=imgs.filter(i=>i.id!==id);renderThumbs();}
 
@@ -957,7 +971,7 @@ async function runAI(){
   const imgBlocks=imgs.slice(0,1).map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.b64.split(',')[1]}}));
   const supplierSection=supplierCopy?`\n廠商文案（${currentMode==='direct'?'直接沿用':'參考用，不要照抄'}）：\n"""\n${supplierCopy}\n"""\n`:'';
   const urlSection=refUrls.length?`\n參考網址：\n${refUrls.map((u,i)=>`${i+1}. ${u}`).join('\n')}\n`:'';
-  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請搜尋這個商品的台灣網友評價（PTT、Dcard、FB社團）和商品圖片 URL（3〜6 個）。`;
+  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請用web_search搜尋：1)商品的詳細介紹與特色 2)台灣或國際網友的使用心得評價 3)商品的成分或規格資訊 4)相關圖片URL（3~6個）。搜尋時用中文和原文名稱都試試。`;
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
   const keywordRaw=document.getElementById('prodKeyword').value.trim();
@@ -1031,16 +1045,18 @@ function buildPost(){
   const titleLine=`${s.teamname}｜${name}`;
   const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
   const size=document.getElementById('prodSize').value.trim();
-  const specBlock=`【容量】${vol||'請補充'}${size?'\n【尺寸】'+size:''}\n【開團價】${pf}\n${s.mid}`;
-  document.getElementById('rf-title').textContent=titleLine;
+  const variants=document.getElementById('prodVariants').value.trim();
+  const variantLine=variants?'\n【款式】'+variants.split('\n').filter(Boolean).join('、'):'';
+  const specBlock=`【容量】${vol||'請補充'}${size?'\n【尺寸】'+size:''}${variantLine}\n【開團價】${pf}\n${s.mid}`;
+  document.getElementById('rf-title-ta').value=titleLine;
   document.getElementById('rf-intro').value=introBlock;
-  document.getElementById('rf-spec').textContent=specBlock;
-  document.getElementById('rf-notes').textContent=s.notes;
+  document.getElementById('rf-spec').value=specBlock;
+  document.getElementById('rf-notes').value=s.notes;
   const tag=document.getElementById('resultModeTag');
   tag.textContent=currentMode==='mix'?'MIX 改寫版':'直接沿用版';
   tag.className='mode-tag '+currentMode;
   updateRfCharCount(introBlock);
-  document.getElementById('fullPreview').value=[titleLine,introBlock,'',specBlock,s.notes].join('\n');
+  // full text assembled by getFullText()
   if(currentResult.imageUrls?.length){renderImageResults(currentResult.imageUrls);document.getElementById('imgResultSection').style.display='block';}
   if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
   document.getElementById('emptyState').style.display='none';
@@ -1049,7 +1065,7 @@ function buildPost(){
   document.querySelector('.main-area').scrollTop=0;
   updateAdminUI();
   // Auto-save to history
-  saveToHistory(name, pf, document.getElementById('fullPreview').value, imgs.length>0?imgs[0].b64:null);
+  setTimeout(()=>saveToHistory(name, pf, getFullText(), imgs.length>0?imgs[0].b64:null), 50);
 }
 
 function updateRfCharCount(text){
@@ -1057,14 +1073,15 @@ function updateRfCharCount(text){
   el.textContent=`${len} 字`;
   el.style.color=len>=300&&len<=500?'#7A9E7E':len>500?'#C9826B':'#9C8880';
 }
-function onIntroEdit(){updateRfCharCount(document.getElementById('rf-intro').value);syncPreview();}
-function syncPreview(){
-  const t=document.getElementById('rf-title').textContent;
-  const i=document.getElementById('rf-intro').value;
-  const s=document.getElementById('rf-spec').textContent;
-  const n=document.getElementById('rf-notes').textContent;
-  document.getElementById('fullPreview').value=[t,i,'',s,n].join('\n');
+function onIntroEdit(){updateRfCharCount(document.getElementById('rf-intro').value);}
+function getFullText(){
+  const t=document.getElementById('rf-title-ta')?.value||'';
+  const i=document.getElementById('rf-intro')?.value||'';
+  const s=document.getElementById('rf-spec')?.value||'';
+  const n=document.getElementById('rf-notes')?.value||'';
+  return [t,i,'',s,n].join('\n');
 }
+function syncPreview(){ /* no-op, preview removed */ }
 function renderImageResults(urls){
   const g=document.getElementById('imgResultGrid');g.innerHTML='';
   urls.slice(0,9).forEach(url=>{
@@ -1369,7 +1386,7 @@ function finishExport(canvas){
 function copyField(id){navigator.clipboard.writeText(document.getElementById(id).textContent);showToast('已複製');}
 function copyFieldTA(id){navigator.clipboard.writeText(document.getElementById(id).value);showToast('已複製');}
 function copyAll(){
-  navigator.clipboard.writeText(document.getElementById('fullPreview').value);
+  navigator.clipboard.writeText(getFullText());
   const btn=document.getElementById('copyAllBtn');
   btn.innerHTML='✓ 已複製';btn.classList.add('copied');
   setTimeout(()=>{btn.innerHTML='📋 複製全文';btn.classList.remove('copied');},2200);
@@ -1471,11 +1488,14 @@ function loadHistory_item(id) {
   setTimeout(()=>{
     document.getElementById('emptyState').style.display='none';
     document.getElementById('resultPanel').style.display='block';
-    document.getElementById('fullPreview').value = item.fullText||'';
-    document.getElementById('rf-title').textContent = item.name||'';
-    document.getElementById('rf-intro').value = '';
-    document.getElementById('rf-spec').textContent = '';
-    document.getElementById('rf-notes').textContent = '';
+    // Parse stored text back into fields
+    const lines=(item.fullText||'').split('\n');
+    document.getElementById('rf-title-ta').value=lines[0]||'';
+    const introEnd=lines.findIndex((l,i)=>i>0&&l.startsWith('【容量】'));
+    const notesStart=lines.findIndex(l=>l.startsWith('※'));
+    document.getElementById('rf-intro').value=lines.slice(1,introEnd>0?introEnd:lines.length).join('\n');
+    document.getElementById('rf-spec').value=introEnd>0?lines.slice(introEnd,notesStart>0?notesStart:lines.length).join('\n'):'';
+    document.getElementById('rf-notes').value=notesStart>0?lines.slice(notesStart).join('\n'):'';
     showToast('已載入歷史文案，可在預覽區編輯後複製');
   },100);
 }
@@ -1492,6 +1512,31 @@ function clearAllHistory() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(historyItems));
   renderHistory();
   showToast('已清空歷史紀錄');
+}
+
+function nextProduct(){
+  // Keep settings, clear product fields only
+  imgs=[];currentResult={};refUrls=[];
+  renderThumbs();renderUrlTags();
+  ['prodName','prodVol','prodSize','prodPrice','prodDesc','prodVariants','supplierCopy','prodKeyword'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  updateCharCount();
+  // Reset result panel
+  ['rf-title-ta','rf-intro','rf-spec','rf-notes'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('imgResultSection').style.display='none';
+  document.getElementById('reviewSection').style.display='none';
+  // Show empty state, scroll to top
+  document.getElementById('emptyState').style.display='flex';
+  document.getElementById('resultPanel').style.display='none';
+  setStatus('就緒');
+  // Switch to upload tab and scroll sidebar to top
+  switchInnerTab('upload');
+  document.querySelector('.sidebar-body').scrollTop=0;
+  document.querySelector('.main-area').scrollTop=0;
+  showToast('已清空，可開始下一個商品');
 }
 
 // ══════════════════════════════════════════════
