@@ -242,6 +242,20 @@ textarea::placeholder{color:var(--ink-light)}
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--ink);color:var(--white);padding:9px 16px;border-radius:8px;font-size:12px;font-weight:500;opacity:0;transform:translateY(6px);transition:all 0.22s;pointer-events:none;z-index:200}
 .toast.show{opacity:1;transform:translateY(0)}
 
+/* ── Pricing calculator ── */
+.calc-section{background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.calc-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.calc-row:last-child{margin-bottom:0}
+.calc-label{font-size:12px;color:var(--ink-mid);font-weight:500;white-space:nowrap;min-width:72px}
+.calc-input{flex:1;border:1px solid var(--blue-border);border-radius:6px;padding:6px 10px;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);background:var(--white);outline:none}
+.calc-input:focus{border-color:var(--blue)}
+.calc-select{flex:1;border:1px solid var(--blue-border);border-radius:6px;padding:6px 10px;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);background:var(--white);outline:none}
+.calc-result{background:var(--white);border:1px solid var(--blue-border);border-radius:8px;padding:10px 12px;margin-top:8px}
+.calc-result-main{font-size:18px;font-weight:600;color:var(--rose)}
+.calc-result-detail{font-size:11px;color:var(--ink-light);margin-top:3px;line-height:1.6}
+.calc-rate-badge{font-size:10px;color:var(--blue);background:var(--white);border:1px solid var(--blue-border);border-radius:4px;padding:1px 6px;margin-left:4px;cursor:pointer}
+.calc-rate-badge:hover{background:var(--blue-light)}
+
 /* ── History ── */
 .history-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s}
 .history-card:hover{box-shadow:var(--shadow-md)}
@@ -353,6 +367,68 @@ textarea::placeholder{color:var(--ink-light)}
               <div class="sec-label">商品關鍵字 <span class="badge badge-blue">選填</span></div>
               <textarea id="prodKeyword" rows="2" placeholder="每行一個寫法，例如：&#10;LOTTE 杜拜巧克力&#10;롯데 두바이 초콜릿" style="font-size:12px"></textarea>
               <div style="font-size:11px;color:var(--ink-light);margin-top:3px">可填中文、韓文、日文、英文，AI 都會用繁體中文輸出</div>
+            </div>
+
+            <!-- Pricing Calculator -->
+            <div class="section">
+              <div class="sec-label" style="cursor:pointer" onclick="toggleCalc()">
+                訂價計算 <span class="badge badge-blue">選填</span>
+                <span id="calcToggleIcon" style="margin-left:4px;font-size:10px;color:var(--ink-light)">▼</span>
+              </div>
+              <div id="calcBody" class="calc-section">
+                <!-- Country selector -->
+                <div class="calc-row">
+                  <div class="calc-label">國別</div>
+                  <select class="calc-select" id="calcCountry" onchange="onCountryChange()">
+                    <option value="JP">🇯🇵 日本</option>
+                    <option value="KR">🇰🇷 韓圓</option>
+                    <option value="CN">🇨🇳 中國</option>
+                    <option value="TH">🇹🇭 泰國</option>
+                  </select>
+                  <span class="calc-rate-badge" id="rateDisplay" onclick="fetchRates()" title="點擊更新匯率">載入中...</span>
+                </div>
+                <!-- Custom rate -->
+                <div class="calc-row">
+                  <div class="calc-label">匯率</div>
+                  <input class="calc-input" type="number" id="calcRate" placeholder="1外幣=?台幣" step="0.001" oninput="updateCalc()"/>
+                  <span style="font-size:11px;color:var(--ink-light);white-space:nowrap">可手動修改</span>
+                </div>
+                <!-- Price & weight -->
+                <div class="row2" style="margin-bottom:8px">
+                  <div>
+                    <div class="calc-label" style="margin-bottom:4px">原始售價</div>
+                    <input class="calc-input" type="number" id="calcOrigPrice" placeholder="原幣金額" oninput="updateCalc()"/>
+                  </div>
+                  <div>
+                    <div class="calc-label" style="margin-bottom:4px">商品重量(g)</div>
+                    <input class="calc-input" type="number" id="calcWeight" placeholder="克，留空自動估" oninput="updateCalc()"/>
+                  </div>
+                </div>
+                <!-- Shipping rate per kg (editable) -->
+                <div class="calc-row">
+                  <div class="calc-label">運費/kg</div>
+                  <input class="calc-input" type="number" id="calcShippingKg" placeholder="每公斤運費(NT)" oninput="updateCalc()"/>
+                  <span style="font-size:11px;color:var(--ink-light);white-space:nowrap" id="shippingHint">NT/kg</span>
+                </div>
+                <!-- Result -->
+                <div class="calc-result" id="calcResult" style="display:none">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                    <div style="flex:1;min-width:100px">
+                      <div style="font-size:11px;color:var(--ink-light);margin-bottom:2px">零售價</div>
+                      <div class="calc-result-main" id="calcRetail"></div>
+                    </div>
+                    <div style="flex:1;min-width:100px">
+                      <div style="font-size:11px;color:var(--ink-light);margin-bottom:2px">批發價</div>
+                      <div class="calc-result-main" style="color:var(--blue)" id="calcWholesale"></div>
+                    </div>
+                  </div>
+                  <div class="calc-result-detail" id="calcResultDetail"></div>
+                  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+                    <button style="font-size:12px;padding:4px 10px;border:1px solid var(--rose-light);border-radius:6px;background:var(--petal);color:var(--rose-dark);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('retail')">套用零售價 →</button>
+                    <button style="font-size:12px;padding:4px 10px;border:1px solid var(--blue-border);border-radius:6px;background:var(--blue-light);color:var(--blue);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('wholesale')">套用批發價</button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="section">
@@ -726,8 +802,7 @@ function updateAdminUI() {
     btn.classList.remove('active-admin');
   }
   // Update save style button visibility
-  const ssBtn = document.getElementById('saveStyleBtn');
-  if (ssBtn) ssBtn.style.display = isAdmin ? '' : 'none';
+  // saveStyleBtn always visible - click will check admin permission
   renderStyleTab();
 }
 
@@ -794,13 +869,21 @@ function saveFromResult() {
   if (!isAdmin) { showToast('需要管理員權限才能存入文風庫'); return; }
   const text = document.getElementById('rf-intro').value.trim();
   if (!text) { showToast('介紹文為空'); return; }
-  switchInnerTab('style');
-  setTimeout(() => {
-    const tag = (document.getElementById('prodName').value.split('・').pop()||'').split(' ')[0];
-    if (document.getElementById('styleTag')) document.getElementById('styleTag').value = tag;
-    if (document.getElementById('styleInput')) document.getElementById('styleInput').value = text;
-    showToast('已帶入，確認後按「存入文風庫」');
-  }, 100);
+  const name = document.getElementById('prodName').value.trim();
+  const tag = (name.split('・').pop()||'').split(' ')[0];
+  // Direct save - no page switch needed
+  styleSamples.push({id:Date.now(), tag, text, date:new Date().toLocaleDateString('zh-TW')});
+  localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  // Flash the button to confirm
+  const btn = document.getElementById('saveStyleBtn');
+  if (btn) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ 已存入文風庫';
+    btn.style.background = '#d0e8d0';
+    btn.style.borderColor = '#7A9E7E';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.borderColor = ''; }, 2000);
+  }
+  showToast(`「${tag||'商品'}」已存入文風庫 ✓`);
 }
 
 function removeStyleSample(id) {
@@ -1419,6 +1502,189 @@ function showToast(msg){
 }
 
 
+
+// ══════════════════════════════════════════════
+// PRICING CALCULATOR (完整版)
+// ══════════════════════════════════════════════
+
+// 各國預設設定
+const COUNTRY_CONFIG = {
+  JP: { currency:'JPY', rate:0.22,                shippingPerKg:200, label:'日本', taxMult:1.1 },
+  KR: { currency:'KRW', rate:1/42,                shippingPerKg:150, label:'韓國', taxMult:1.0 },
+  CN: { currency:'CNY', rate:5.0,                 shippingPerKg:100, label:'中國', taxMult:1.0 },
+  TH: { currency:'THB', rate:1.01,                shippingPerKg:120, label:'泰國', taxMult:1.0 },
+};
+
+let exchangeRates = {}; // live rates: TWD per 1 foreign
+let calcVisible = true;
+
+function toggleCalc() {
+  calcVisible = !calcVisible;
+  document.getElementById('calcBody').style.display = calcVisible ? 'block' : 'none';
+  document.getElementById('calcToggleIcon').textContent = calcVisible ? '▼' : '▶';
+}
+
+async function fetchRates() {
+  const badge = document.getElementById('rateDisplay');
+  if (!badge) return;
+  badge.textContent = '更新中...';
+  try {
+    const res = await fetch('https://api.frankfurter.app/latest?from=TWD&to=JPY,KRW,THB,CNY');
+    const data = await res.json();
+    // data.rates = foreign per TWD → invert to get TWD per foreign
+    Object.entries(data.rates).forEach(([cur, rate]) => {
+      exchangeRates[cur] = 1 / rate;
+    });
+    // Update COUNTRY_CONFIG with live rates
+    if (exchangeRates.JPY) COUNTRY_CONFIG.JP.rate = exchangeRates.JPY;
+    // KRW: 固定使用韓元/42 公式，不用即時匯率
+    if (exchangeRates.THB) COUNTRY_CONFIG.TH.rate = exchangeRates.THB;
+    if (exchangeRates.CNY) COUNTRY_CONFIG.CN.rate = exchangeRates.CNY;
+    onCountryChange();
+    badge.textContent = '匯率已更新 ↻';
+    setTimeout(()=>{ if(badge) badge.textContent='點擊更新匯率 ↻'; }, 2000);
+  } catch(e) {
+    badge.textContent = '使用預設匯率 ↻';
+  }
+}
+
+function onCountryChange() {
+  const country = document.getElementById('calcCountry')?.value || 'JP';
+  const cfg = COUNTRY_CONFIG[country];
+  // Set rate input
+  const rateEl = document.getElementById('calcRate');
+  if (rateEl && !rateEl._userEdited) rateEl.value = cfg.rate.toFixed(4);
+  // Set shipping
+  const shipEl = document.getElementById('calcShippingKg');
+  if (shipEl && !shipEl._userEdited) shipEl.value = cfg.shippingPerKg;
+  // Update badge
+  const badge = document.getElementById('rateDisplay');
+  if (badge) badge.textContent = `1${cfg.currency}=${cfg.rate.toFixed(4)}TWD ↻`;
+  updateCalc();
+}
+
+// Mark as user-edited so country change doesn't override
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('calcRate')?.addEventListener('input', function(){ this._userEdited=true; });
+  document.getElementById('calcShippingKg')?.addEventListener('input', function(){ this._userEdited=true; });
+});
+
+// 段位重量計算（≤1kg）
+function calcBillingWeight(grams) {
+  if (!grams || grams <= 0) return null;
+  const g = parseFloat(grams);
+  if (g <= 100)  return 0.15;
+  if (g <= 150)  return 0.25;
+  if (g <= 250)  return 0.40;
+  if (g <= 350)  return 0.45;
+  if (g <= 500)  return 0.50;
+  if (g <= 650)  return 0.65;
+  if (g <= 800)  return 0.80;
+  if (g <= 1000) return 1.00;
+  // >1kg: max(0.45, actualKg + 0.18)
+  const kg = g / 1000;
+  return Math.round(Math.max(0.45, kg + 0.18) * 100) / 100;
+}
+
+// 尾數取5或8（就近）
+function roundTo5or8(price) {
+  const base = Math.floor(price / 10) * 10;
+  const rem = price - base;
+  if (rem <= 3.5)  return base + 5 > price ? base + 5 : base + 8; // try 5 first
+  // pick nearest of 5 or 8
+  const to5 = Math.abs(price - (base + 5));
+  const to8 = Math.abs(price - (base + 8));
+  if (to5 <= to8) return base + 5;
+  // check next decade
+  const to15 = Math.abs(price - (base + 15));
+  return to8 <= to15 ? base + 8 : base + 15;
+}
+
+// 依國別定價規則計算零售價
+function calcRetailPrice(costTWD, country) {
+  let retail;
+  if (country === 'CN') {
+    // 中國：成本 + 78~110，取中間值
+    const add = Math.round((78 + 110) / 2); // ~94
+    retail = costTWD + add;
+    return roundTo5or8(Math.round(retail));
+  }
+  if (country === 'KR') {
+    let add;
+    if (costTWD < 200)      add = Math.round((65+93)/2);
+    else if (costTWD < 300) add = Math.round((78+108)/2);
+    else if (costTWD < 400) add = Math.round((88+118)/2);
+    else if (costTWD < 500) add = Math.round((99+138)/2);
+    else {
+      // 回通用規則
+      return calcRetailPrice(costTWD, '_generic');
+    }
+    retail = costTWD + add;
+    return roundTo5or8(Math.round(retail));
+  }
+  // 日本、泰國、美國、通用
+  if (costTWD > 1000) retail = costTWD + 250;
+  else if (costTWD > 500) retail = costTWD + Math.round((150+200)/2);
+  else retail = costTWD * 1.275; // 中間值
+  return roundTo5or8(Math.round(retail));
+}
+
+// 批發價
+function calcWholesalePrice(costTWD) {
+  const ws = costTWD * 1.125; // 1.10~1.15 中間值
+  return roundTo5or8(Math.round(ws));
+}
+
+function updateCalc() {
+  const country = document.getElementById('calcCountry')?.value || 'JP';
+  const cfg = COUNTRY_CONFIG[country];
+  const origPrice = parseFloat(document.getElementById('calcOrigPrice')?.value) || 0;
+  const weightG = parseFloat(document.getElementById('calcWeight')?.value) || 0;
+  const customRate = parseFloat(document.getElementById('calcRate')?.value) || cfg.rate;
+  const shippingKg = parseFloat(document.getElementById('calcShippingKg')?.value) || cfg.shippingPerKg;
+  const result = document.getElementById('calcResult');
+
+  if (!origPrice) { if(result) result.style.display='none'; return; }
+
+  // 1. 含稅原價
+  const taxedPrice = origPrice * (cfg.taxMult || 1.0);
+  // 2. 換算台幣
+  const costTWD = taxedPrice * customRate;
+  // 3. 計費重量
+  const billingKg = weightG ? calcBillingWeight(weightG) : null;
+  const shippingCost = billingKg ? billingKg * shippingKg : 0;
+  const weightNote = billingKg
+    ? `計費重量 ${billingKg}kg × NT${shippingKg}/kg = NT${Math.round(shippingCost)}`
+    : '未填重量（運費未計入）';
+  // 4. 總成本
+  const totalCost = costTWD + shippingCost;
+  // 5. 定價
+  const retail = calcRetailPrice(totalCost, country);
+  const wholesale = calcWholesalePrice(totalCost);
+
+  document.getElementById('calcRetail').textContent = `NT ${retail}`;
+  document.getElementById('calcWholesale').textContent = `NT ${wholesale}`;
+
+  const taxNote = cfg.taxMult > 1 ? `（含稅 ×${cfg.taxMult}）` : '';
+  document.getElementById('calcResultDetail').innerHTML =
+    `原價 ${origPrice} ${cfg.currency}${taxNote} × ${customRate.toFixed(4)} = <b>NT ${Math.round(costTWD)}</b><br>` +
+    `${weightNote}<br>` +
+    `總成本 NT ${Math.round(totalCost)} → 零售 NT ${retail} / 批發 NT ${wholesale}`;
+
+  result.style.display = 'block';
+
+  // Store last result
+  window._lastCalc = { retail, wholesale, totalCost, country };
+}
+
+function applyCalcPrice(type) {
+  if (!window._lastCalc) return;
+  const price = type === 'wholesale' ? window._lastCalc.wholesale : window._lastCalc.retail;
+  const priceInput = document.getElementById('prodPrice');
+  if (priceInput) priceInput.value = `${price}元`;
+  showToast(`已套用${type==='wholesale'?'批發':'零售'}價 NT ${price} 元`);
+}
+
 // ══════════════════════════════════════════════
 // HISTORY
 // ══════════════════════════════════════════════
@@ -1546,6 +1812,9 @@ loadSettings();
 loadHistory();
 renderStyleTab();
 updateAdminUI();
+fetchRates();
+// Init calc defaults
+setTimeout(()=>onCountryChange(), 100);
 </script>
 </body>
 </html>
