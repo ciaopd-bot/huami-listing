@@ -1377,7 +1377,7 @@ function buildPost(){
   const name=document.getElementById('prodName').value.trim();
   const vol=document.getElementById('prodVol').value.trim();
   const price=document.getElementById('prodPrice').value.trim();
-  const desc=document.getElementById('prodDesc').value.trim();
+  let desc=document.getElementById('prodDesc').value.trim();
   const s=getSettings();
   const nameEl=document.getElementById('prodName');
   const priceEl=document.getElementById('prodPrice');
@@ -1388,6 +1388,17 @@ function buildPost(){
   if(hasError){showToast('請填寫紅色標示的必填欄位');return;}
   const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
   const titleLine=`${s.teamname}｜${name}`;
+  // Clean desc: remove lines that duplicate title, price, or hashtag (AI sometimes adds these)
+  const descLines = desc.split('\n');
+  const cleanedDesc = descLines.filter(line=>{
+    const t = line.trim();
+    if(!t) return true; // keep empty lines
+    if(t.startsWith(s.teamname+'｜')) return false; // remove title duplicates
+    if(t.startsWith('𝙉𝙏：')||t.startsWith('NT：')) return false; // remove price duplicates
+    if(t.startsWith('#'+s.teamname+'=>')) return false; // remove hashtag duplicates
+    return true;
+  }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'); // trim leading newlines, collapse 3+ newlines
+  desc = cleanedDesc;
   const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
   const size=document.getElementById('prodSize').value.trim();
   const variants=document.getElementById('prodVariants').value.trim();
