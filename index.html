@@ -1345,7 +1345,8 @@ function confirmSendToOrder(){
   const variantRaw=document.getElementById('sto-variants').value.trim();
   if(!name){showToast('請填入商品名稱');return;}
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
-  const thumb=imgs.length>0?imgs[0].b64:null;
+  const thumb=(imgs.length>0?imgs[0].b64:null) || window._historyThumb || null;
+  window._historyThumb = null; // clear after use
   const product={
     id:Date.now(),name,vendor,price,thumb,
     variants:variants.map(v=>({label:v,qty:0,checked:true,totalOrdered:0}))
@@ -1928,6 +1929,7 @@ function renderHistory() {
       <div class="history-actions">
         <button class="btn-regen" onclick="copyHistory(${item.id})">📋 複製全文</button>
         <button class="btn-regen" onclick="loadHistory_item(${item.id})" style="border-color:var(--rose-light);color:var(--rose)">↩ 載入編輯</button>
+        <button class="btn-regen" onclick="historyToOrder(${item.id})" style="border-color:#a8d4a8;color:#3a7a3a;background:var(--leaf-light)">📦 加入訂貨</button>
       </div>
     </div>`).join('');
 }
@@ -1957,6 +1959,43 @@ function loadHistory_item(id) {
     document.getElementById('rf-notes').value=notesStart>0?lines.slice(notesStart).join('\n'):'';
     showToast('已載入歷史文案，可在預覽區編輯後複製');
   },100);
+}
+
+function historyToOrder(id) {
+  const item = historyItems.find(h=>h.id===id);
+  if (!item) return;
+
+  // Parse name and price from stored text
+  const lines = (item.fullText||'').split('\n');
+  // Title line: "花開未滿團｜韓國・商品名"
+  const titleLine = lines[0]||'';
+  const namePart = titleLine.includes('｜') ? titleLine.split('｜')[1] : titleLine;
+
+  // Price: second line usually "𝙉𝙏：XXX元/件"
+  const priceLine = lines[1]||'';
+  const priceMatch = priceLine.match(/[\d𝙉𝙏NT：元\/件盒款包袋組套罐瓶片條個]+/);
+  const price = priceLine.trim();
+
+  // Pre-fill the sendToOrder modal
+  document.getElementById('sto-name').value = namePart;
+  document.getElementById('sto-price').value = price;
+  document.getElementById('sto-vendor').value = '';
+  document.getElementById('sto-variants').value = '';
+
+  // Show photo if available
+  const photoWrap = document.getElementById('sto-photo-wrap');
+  const photoEl = document.getElementById('sto-photo');
+  if (item.thumb && photoEl) {
+    photoEl.src = item.thumb;
+    photoWrap.style.display = 'block';
+  } else {
+    photoWrap.style.display = 'none';
+  }
+
+  // Store thumb for when confirmed
+  window._historyThumb = item.thumb || null;
+
+  openModal('sendToOrderModal');
 }
 
 function deleteHistory(id) {
