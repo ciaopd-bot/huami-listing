@@ -1403,9 +1403,7 @@ function buildPost(){
   updateRfCharCount(introBlock);
   // Write full post to unified textarea
   const fullPost=[titleLine,introBlock,'',specBlock,s.notes].join('\n');
-  console.log('buildPost fullPost length:', fullPost.length, 'titleLine:', titleLine.slice(0,30));
   const up=document.getElementById('unifiedPost');
-  console.log('unifiedPost element:', up ? 'found' : 'NOT FOUND');
   if(up){
     up.value=fullPost;
     up.dispatchEvent(new Event('input')); // trigger any listeners
@@ -1416,7 +1414,6 @@ function buildPost(){
   if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
   document.getElementById('emptyState').style.display='none';
   document.getElementById('resultPanel').style.display='block';
-  console.log('resultPanel shown, unifiedPost value length:', document.getElementById('unifiedPost')?.value?.length);
   setStatus('文案已產生');
   document.querySelector('.main-area').scrollTop=0;
   updateAdminUI();
@@ -1452,6 +1449,34 @@ function getFullText(){
   return [t,i,'',s,n].join('\n');
 }
 function syncPreview(){ /* no-op, preview removed */ }
+
+function onUnifiedEdit(){
+  updateUnifiedChar();
+  // Sync back to hidden fields for saveFromResult
+  const text = document.getElementById('unifiedPost')?.value||'';
+  const lines = text.split('\n');
+  const specIdx = lines.findIndex(l=>l.startsWith('【容量】'));
+  const notesIdx = lines.findIndex(l=>l.startsWith('※'));
+  if(document.getElementById('rf-title-ta')) document.getElementById('rf-title-ta').value = lines[0]||'';
+  if(document.getElementById('rf-intro')) document.getElementById('rf-intro').value = specIdx>0?lines.slice(1,specIdx).join('\n'):lines.slice(1).join('\n');
+  if(document.getElementById('rf-spec')) document.getElementById('rf-spec').value = specIdx>0?(notesIdx>0?lines.slice(specIdx,notesIdx).join('\n'):lines.slice(specIdx).join('\n')):'';
+  if(document.getElementById('rf-notes')) document.getElementById('rf-notes').value = notesIdx>0?lines.slice(notesIdx).join('\n'):'';
+}
+
+function updateUnifiedChar(){
+  const text = document.getElementById('unifiedPost')?.value||'';
+  const lines = text.split('\n');
+  const introStart = lines.findIndex(l=>l.startsWith('#'));
+  const introEnd = lines.findIndex(l=>l.startsWith('【容量】'));
+  const introText = introStart>=0&&introEnd>introStart ? lines.slice(introStart+1,introEnd).join('\n') : '';
+  const len = introText.length;
+  const el = document.getElementById('unified-char');
+  if(el){
+    el.textContent = len>0?`介紹文 ${len} 字`:'';
+    el.style.color = len>=300&&len<=500?'var(--leaf)':len>500?'var(--rose)':'var(--ink-light)';
+  }
+}
+
 function renderImageResults(urls){
   const g=document.getElementById('imgResultGrid');g.innerHTML='';
   urls.slice(0,9).forEach(url=>{
