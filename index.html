@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>花開未滿團｜上架工具</title>
+<title>huami 開團工具</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -354,7 +354,7 @@ input.field-error::placeholder{color:#C9826B}
 
   <!-- Top nav -->
   <nav class="app-nav">
-    <div class="nav-logo">🌸 花開未滿團 <span>內部工具</span></div>
+    <div class="nav-logo">🌸 huami <span>開團工具</span></div>
     <div class="nav-tabs">
       <div class="nav-tab active" onclick="switchPage('listing')">上架文產生</div>
       <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
@@ -971,7 +971,7 @@ function removeStyleSample(id) {
 }
 
 function exportStyleLib() {
-  download('花開未滿團文風庫.json', JSON.stringify(styleSamples, null, 2));
+  download('huami文風庫.json', JSON.stringify(styleSamples, null, 2));
 }
 
 function importStyleLib(e) {
@@ -1018,7 +1018,7 @@ function saveSettings() {
   setTimeout(()=>b.classList.remove('on'),2500); showToast('設定已儲存');
 }
 
-function exportSettings() { download('花開未滿團設定.json', JSON.stringify(getSettings(),null,2)); }
+function exportSettings() { download('huami設定.json', JSON.stringify(getSettings(),null,2)); }
 function importSettings(e) {
   readJSON(e.target.files[0], s => {
     if(s.teamname) document.getElementById('cfg-teamname').value=s.teamname;
@@ -1403,8 +1403,18 @@ function confirmSendToOrder(){
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   closeModal('sendToOrderModal');
-  showToast('已加入訂貨清單，正在前往...');
-  setTimeout(()=>switchPage('order'),400);
+  showToast('✓ 已加入訂貨清單');
+  // Flash the button in listing page if visible
+  const addBtn = document.querySelector('[onclick="showSendToOrderModal()"]');
+  if(addBtn){
+    const orig = addBtn.innerHTML;
+    addBtn.innerHTML = '✓ 已加入';
+    addBtn.style.background = 'var(--leaf-light)';
+    addBtn.style.borderColor = 'var(--leaf)';
+    addBtn.style.color = '#3a7a3a';
+    setTimeout(()=>{ addBtn.innerHTML=orig; addBtn.style.background=''; addBtn.style.borderColor=''; addBtn.style.color=''; },2500);
+  }
+  setTimeout(()=>switchPage('order'),600);
 }
 
 function showAddProductModal(){openModal('addProductModal');['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');}
@@ -1434,8 +1444,11 @@ function renderProducts(){
   list.innerHTML=products.map((p,pi)=>`
     <div class="product-card">
       <div class="product-card-header">
-        <div style="display:flex;align-items:center;gap:10px;flex:1">
-          ${p.thumb?`<img src="${p.thumb}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`:'<div style="width:52px;height:52px;border-radius:6px;border:1px solid var(--border);background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📦</div>'}
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+          <input type="checkbox" class="variant-check" style="width:20px;height:20px;flex-shrink:0"
+            ${p.variants.every(v=>v.checked!==false)?'checked':p.variants.some(v=>v.checked!==false)?'indeterminate':''} 
+            onchange="toggleProduct(${pi},this.checked)" title="全選/取消此商品所有款式"/>
+          ${p.thumb?`<img src="${p.thumb}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`:'<div style="width:48px;height:48px;border-radius:6px;border:1px solid var(--border);background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>'}
           <div style="flex:1;min-width:0">
             <div class="product-card-name">${p.name}</div>
             ${p.vendor?`<div style="font-size:11px;color:var(--ink-light);margin-top:2px">${p.vendor}</div>`:''}
@@ -1468,6 +1481,35 @@ function renderProducts(){
         }).join('')}
       </div>
     </div>`).join('');
+  // Set indeterminate for partial selection
+  setTimeout(()=>{
+    const cards = list.querySelectorAll('.product-card');
+    products.forEach((p,pi)=>{
+      const cb = cards[pi]?.querySelector('input[type=checkbox]');
+      if(!cb) return;
+      const allOn = p.variants.every(v=>v.checked!==false);
+      const someOn = p.variants.some(v=>v.checked!==false);
+      cb.indeterminate = !allOn && someOn;
+    });
+  }, 0);
+}
+
+function toggleProduct(pi, checked){
+  // Toggle all variants of this product
+  products[pi].variants.forEach((v,vi)=>{
+    v.checked = checked;
+    if(!checked) v.qty = 0;
+    // Update row style
+    const row = document.getElementById(`vrow-${pi}-${vi}`);
+    if(row){
+      row.className = 'variant-row'+(checked?' selected':'');
+      row.querySelectorAll('.qty-btn').forEach(b=>b.disabled=!checked);
+    }
+    const el = document.getElementById(`qty-${pi}-${vi}`);
+    if(el){ el.textContent=0; el.className='qty-display'; }
+  });
+  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  renderOrderSummary();
 }
 
 function toggleVariant(pi,vi,checked){
@@ -1686,16 +1728,43 @@ function finishExport(canvas){
 // ══════════════════════════════════════════════
 // COPY HELPERS
 // ══════════════════════════════════════════════
-function sharePost(){
+async function sharePost(){
   const text = getFullText();
   if(!text){showToast('請先產生上架文');return;}
-  if(navigator.share){
-    navigator.share({title:'花開未滿團上架文', text})
-      .catch(()=>{});
-  } else {
-    // Fallback: copy
+
+  if(!navigator.share){
     navigator.clipboard.writeText(text);
     showToast('已複製全文（此裝置不支援直接分享）');
+    return;
+  }
+
+  // Try to share with first photo if available
+  if(imgs.length > 0 && navigator.canShare){
+    try{
+      // Convert base64 to File object
+      const b64 = imgs[0].b64;
+      const mimeType = imgs[0].type || 'image/jpeg';
+      const res = await fetch(b64);
+      const blob = await res.blob();
+      const file = new File([blob], 'product.jpg', {type: mimeType});
+      const shareData = {title:'huami 開團工具', text, files:[file]};
+      if(navigator.canShare(shareData)){
+        await navigator.share(shareData);
+        return;
+      }
+    } catch(e){
+      console.log('file share failed, fallback to text', e);
+    }
+  }
+
+  // Fallback: text only
+  try{
+    await navigator.share({title:'huami 開團工具', text});
+  } catch(e){
+    if(e.name !== 'AbortError'){
+      navigator.clipboard.writeText(text);
+      showToast('已複製全文');
+    }
   }
 }
 
@@ -2037,7 +2106,7 @@ function historyToOrder(id) {
   document.getElementById('sto-vendor').value = '';
   document.getElementById('sto-variants').value = '';
 
-  // Show photo if available
+  // Show photo + draggable photo grid if available
   const photoWrap = document.getElementById('sto-photo-wrap');
   const photoEl = document.getElementById('sto-photo');
   if (item.thumb && photoEl) {
@@ -2046,11 +2115,58 @@ function historyToOrder(id) {
   } else {
     photoWrap.style.display = 'none';
   }
-
-  // Store thumb for when confirmed
   window._historyThumb = item.thumb || null;
+  window._historyPhotos = item.photos || (item.thumb ? [item.thumb] : []);
+  
+  // Show draggable photo grid for reordering
+  let photoGrid = document.getElementById('sto-photo-grid');
+  if (!photoGrid) {
+    photoGrid = document.createElement('div');
+    photoGrid.id = 'sto-photo-grid';
+    photoWrap.parentNode.insertBefore(photoGrid, photoWrap.nextSibling);
+  }
+  renderHistoryPhotoGrid();
 
   openModal('sendToOrderModal');
+}
+
+function renderHistoryPhotoGrid(){
+  const grid = document.getElementById('sto-photo-grid');
+  if(!grid) return;
+  const photos = window._historyPhotos || [];
+  if(photos.length <= 1){ grid.innerHTML=''; return; }
+  grid.innerHTML = '';
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px';
+  let dragIdx = null;
+  photos.forEach((src, i)=>{
+    const d = document.createElement('div');
+    d.style.cssText = 'position:relative;aspect-ratio:1;border-radius:7px;overflow:hidden;border:1.5px solid var(--border);cursor:grab';
+    d.draggable = true;
+    d.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover;pointer-events:none">
+      <div style="position:absolute;bottom:2px;left:3px;font-size:9px;color:#fff;background:rgba(0,0,0,0.5);border-radius:3px;padding:1px 4px;pointer-events:none">${i+1}</div>`;
+    d.addEventListener('dragstart', e=>{ dragIdx=i; e.dataTransfer.setData('text/plain',String(i)); setTimeout(()=>d.style.opacity='0.4',0); });
+    d.addEventListener('dragend', ()=>{ d.style.opacity='1'; });
+    d.addEventListener('dragover', e=>{ e.preventDefault(); d.style.outline='2px solid var(--rose)'; });
+    d.addEventListener('dragleave', ()=>{ d.style.outline=''; });
+    d.addEventListener('drop', e=>{
+      e.preventDefault(); d.style.outline='';
+      const from = parseInt(e.dataTransfer.getData('text/plain'));
+      const to = i;
+      if(from===to) return;
+      const moved = window._historyPhotos.splice(from,1)[0];
+      window._historyPhotos.splice(to,0,moved);
+      window._historyThumb = window._historyPhotos[0];
+      // Update main photo preview
+      const photoEl = document.getElementById('sto-photo');
+      if(photoEl) photoEl.src = window._historyThumb;
+      renderHistoryPhotoGrid();
+    });
+    grid.appendChild(d);
+  });
+  const hint = document.createElement('div');
+  hint.style.cssText = 'font-size:11px;color:var(--ink-light);grid-column:1/-1;text-align:center;margin-top:2px';
+  hint.textContent = '拖曳照片調整順序，第1張對應第1個款式';
+  grid.appendChild(hint);
 }
 
 function deleteHistory(id) {
