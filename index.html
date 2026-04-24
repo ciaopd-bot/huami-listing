@@ -1401,7 +1401,10 @@ function buildPost(){
   tag.textContent=currentMode==='mix'?'MIX 改寫版':'直接沿用版';
   tag.className='mode-tag '+currentMode;
   updateRfCharCount(introBlock);
-  // full text assembled by getFullText()
+  // Write full post to unified textarea
+  const fullPost=[titleLine,introBlock,'',specBlock,s.notes].join('\n');
+  const up=document.getElementById('unifiedPost');
+  if(up){ up.value=fullPost; updateUnifiedChar(); }
   if(currentResult.imageUrls?.length){renderImageResults(currentResult.imageUrls);document.getElementById('imgResultSection').style.display='block';}
   if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
   document.getElementById('emptyState').style.display='none';
