@@ -589,21 +589,25 @@ EX：+1
 
 <!-- Send to order modal -->
 <div class="modal-overlay hidden" id="sendToOrderModal">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:440px">
     <div class="modal-title">📦 加入訂貨清單</div>
-    <div class="modal-sub">確認商品資訊，款式規格每行一個（例如顏色或尺寸），留空表示單一款式</div>
+    <div class="modal-sub">確認後加入，數量到訂貨管理再填</div>
+    <!-- Photo preview -->
+    <div id="sto-photo-wrap" style="display:none;margin-bottom:12px">
+      <img id="sto-photo" style="width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:var(--cream)"/>
+    </div>
     <div class="field-row"><label>商品名稱</label><input type="text" id="sto-name"/></div>
     <div class="row2">
-      <div class="field-row"><label>廠商</label><input type="text" id="sto-vendor" placeholder="選填"/></div>
-      <div class="field-row"><label>單價</label><input type="text" id="sto-price"/></div>
+      <div class="field-row"><label>廠商（選填）</label><input type="text" id="sto-vendor" placeholder="選填"/></div>
+      <div class="field-row"><label>售價</label><input type="text" id="sto-price"/></div>
     </div>
     <div class="field-row">
-      <label>款式 / 規格（每行一個）</label>
-      <textarea id="sto-variants" rows="4" placeholder="米色&#10;黑色&#10;深藍&#10;&#10;若單一款式留空即可"></textarea>
+      <label>款式 / 規格（每行一個，留空為單一款式）</label>
+      <textarea id="sto-variants" rows="5" placeholder="例如有多款顏色或尺寸：&#10;米色&#10;黑色&#10;深藍&#10;&#10;單一款式請留空"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('sendToOrderModal')">取消</button>
-      <button class="btn btn-leaf" onclick="confirmSendToOrder()">加入訂貨清單 →</button>
+      <button class="btn btn-leaf" onclick="confirmSendToOrder()">加入並前往訂貨管理 →</button>
     </div>
   </div>
 </div>
@@ -1079,6 +1083,15 @@ function showSendToOrderModal(){
   document.getElementById('sto-price').value=price;
   document.getElementById('sto-vendor').value='';
   document.getElementById('sto-variants').value='';
+  // Show first uploaded photo
+  const photoWrap=document.getElementById('sto-photo-wrap');
+  const photoEl=document.getElementById('sto-photo');
+  if(imgs.length>0){
+    photoEl.src=imgs[0].b64;
+    photoWrap.style.display='block';
+  } else {
+    photoWrap.style.display='none';
+  }
   openModal('sendToOrderModal');
 }
 
@@ -1097,11 +1110,8 @@ function confirmSendToOrder(){
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   closeModal('sendToOrderModal');
-  showToast('已加入訂貨清單 ✓');
-  // Flash the order tab
-  const orderTab=document.querySelectorAll('.nav-tab')[1];
-  orderTab.style.color='var(--leaf)';
-  setTimeout(()=>orderTab.style.color='',1500);
+  showToast('已加入訂貨清單，正在前往...');
+  setTimeout(()=>switchPage('order'),400);
 }
 
 function showAddProductModal(){openModal('addProductModal');['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');}
