@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>花開未滿團｜上架工具</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#FAF8F3;--petal:#F2E8E0;--rose:#C9826B;--rose-dark:#A05C47;--rose-light:#EDD8CE;
+  --leaf:#7A9E7E;--leaf-light:#EAF3E8;--ink:#2C2420;--ink-mid:#5C4A42;--ink-light:#9C8880;
+  --border:#E8DDD6;--white:#FFFFFF;
+  --blue:#4A7FA5;--blue-light:#EBF3FA;--blue-border:#B8D4EA;
+  --gold:#A07840;--gold-light:#F5EDD8;--gold-border:#D4C0A0;
+  --red:#B04040;--red-light:#FAEAEA;--red-border:#E0B8B8;
+  --shadow:0 2px 12px rgba(44,36,32,0.08);--shadow-md:0 4px 24px rgba(44,36,32,0.13);
+}
+html,body{height:100%;background:var(--cream);color:var(--ink);font-family:'Noto Sans TC',sans-serif;font-size:14px}
+
+/* ── App shell ── */
+.app-shell{display:flex;flex-direction:column;height:100vh}
+.app-nav{display:flex;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;padding:0 1.5rem;height:52px;gap:0}
+.nav-logo{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--ink);margin-right:1.5rem;white-space:nowrap}
+.nav-logo span{font-size:11px;font-weight:400;color:var(--ink-light);margin-left:6px;font-family:'Noto Sans TC',sans-serif}
+.nav-tabs{display:flex;gap:0;flex:1}
+.nav-tab{padding:0 18px;height:52px;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--ink-light);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
+.nav-tab.active{color:var(--rose);border-bottom-color:var(--rose)}
+.nav-tab:hover:not(.active){color:var(--ink-mid)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.admin-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;transition:all 0.15s}
+.admin-btn:hover{border-color:var(--rose);color:var(--rose)}
+.admin-btn.active-admin{background:var(--petal);border-color:var(--rose);color:var(--rose-dark)}
+
+.page{display:none;flex:1;overflow:hidden}.page.active{display:flex}
+
+/* ── Layout: sidebar + main ── */
+.layout{display:grid;grid-template-columns:420px 1fr;width:100%;overflow:hidden}
+.sidebar{background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.main-area{overflow-y:auto;background:var(--cream)}
+.sidebar-body{flex:1;overflow-y:auto;padding:1rem 1.4rem}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.inner-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.inner-tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:500;color:var(--ink-light);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.inner-tab.active{color:var(--rose);border-bottom-color:var(--rose)}
+.inner-tab:hover:not(.active){color:var(--ink-mid)}
+
+/* ── Forms ── */
+.section{margin-bottom:1.1rem}
+.sec-label{font-size:11px;font-weight:500;color:var(--ink-light);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+label{font-size:12px;font-weight:500;color:var(--ink-mid);display:block;margin-bottom:4px}
+input[type=text],input[type=password],input[type=number]{width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 11px;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);background:var(--white);outline:none;transition:border-color 0.15s}
+input:focus{border-color:var(--rose)}
+input::placeholder{color:var(--ink-light)}
+textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-family:'Noto Sans TC',sans-serif;font-size:12px;color:var(--ink);background:var(--white);outline:none;resize:vertical;line-height:1.65;transition:border-color 0.15s}
+textarea:focus{border-color:var(--rose)}
+textarea::placeholder{color:var(--ink-light)}
+.field-row{margin-bottom:9px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.ta-gold{border-color:var(--gold-border)!important;background:var(--gold-light)!important}
+.ta-gold:focus{border-color:var(--gold)!important}
+.ta-leaf{border-color:#a8d4a8!important;background:var(--leaf-light)!important}
+
+/* ── Badges ── */
+.badge{display:inline-block;font-size:10px;font-weight:500;padding:1px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.badge-gold{color:var(--gold);background:var(--gold-light);border:1px solid var(--gold-border)}
+.badge-blue{color:var(--blue);background:var(--blue-light);border:1px solid var(--blue-border)}
+.badge-leaf{color:#3a7a3a;background:var(--leaf-light);border:1px solid #a8d4a8}
+.badge-rose{color:var(--rose-dark);background:var(--petal);border:1px solid var(--rose-light)}
+.badge-red{color:var(--red);background:var(--red-light);border:1px solid var(--red-border)}
+
+/* ── Toggle ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--cream);border-radius:8px;border:1px solid var(--border);margin-bottom:8px}
+.toggle-label{font-size:12px;color:var(--ink-mid);font-weight:500}
+.toggle-sub{font-size:11px;color:var(--ink-light);margin-top:1px}
+.toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#d0c8c4;border-radius:20px;cursor:pointer;transition:0.2s}
+.toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:0.2s}
+.toggle input:checked+.toggle-slider{background:var(--rose)}
+.toggle input:checked+.toggle-slider:before{transform:translateX(16px)}
+
+/* ── Mode selector ── */
+.mode-selector{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.mode-btn{padding:8px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;text-align:center;transition:all 0.18s;background:var(--white)}
+.mode-btn:hover{border-color:var(--rose-light)}
+.mode-btn.selected{border-color:var(--rose);background:var(--petal)}
+.mode-icon{font-size:16px;display:block;margin-bottom:2px}
+.mode-title{font-size:12px;font-weight:500;color:var(--ink);display:block}
+.mode-desc{font-size:10px;color:var(--ink-light);display:block;margin-top:1px;line-height:1.35}
+.mode-btn.selected .mode-title{color:var(--rose-dark)}
+
+/* ── Upload ── */
+.upload-zone{border:1.5px dashed var(--border);border-radius:10px;padding:1rem;text-align:center;cursor:pointer;background:var(--cream);transition:all 0.2s}
+.upload-zone:hover{border-color:var(--rose);background:var(--petal)}
+.upload-zone.drag-over{border-color:var(--rose);background:var(--rose-light)}
+.upload-icon{font-size:22px;margin-bottom:4px}
+.upload-txt{font-size:13px;color:var(--ink-mid)}
+.upload-sub{font-size:11px;color:var(--ink-light);margin-top:2px}
+.thumb-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
+.thumb{position:relative;aspect-ratio:1;border-radius:7px;overflow:hidden;border:1px solid var(--border)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb-rm{position:absolute;top:3px;right:3px;width:17px;height:17px;background:rgba(44,36,32,0.72);color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s}
+.thumb:hover .thumb-rm{opacity:1}
+.add-more{aspect-ratio:1;border-radius:7px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--ink-light);transition:all 0.15s;background:var(--cream)}
+.add-more:hover{border-color:var(--rose);color:var(--rose)}
+
+/* ── URL tags ── */
+.url-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.url-tag{display:flex;align-items:center;gap:4px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:99px;padding:3px 9px;font-size:11px;color:var(--blue)}
+.url-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
+.url-tag-rm{background:none;border:none;cursor:pointer;color:var(--blue);font-size:12px;padding:0;opacity:0.6}
+.url-tag-rm:hover{opacity:1}
+.url-input-row{display:flex;gap:6px}
+.url-input-row input{flex:1}
+.btn-add-url{padding:7px 12px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--ink-mid);font-size:12px;cursor:pointer;white-space:nowrap;font-family:'Noto Sans TC',sans-serif;transition:all 0.15s}
+.btn-add-url:hover{border-color:var(--rose);color:var(--rose)}
+
+/* ── Buttons ── */
+.btn{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;padding:9px;border:none;border-radius:8px;font-family:'Noto Sans TC',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s}
+.btn-dark{background:var(--ink);color:var(--white)}.btn-dark:hover{background:var(--ink-mid)}
+.btn-rose{background:var(--rose);color:var(--white)}.btn-rose:hover{background:var(--rose-dark)}
+.btn-outline{background:var(--white);color:var(--ink);border:1px solid var(--border)}.btn-outline:hover{border-color:var(--rose);color:var(--rose)}
+.btn-leaf{background:var(--leaf);color:var(--white)}.btn-leaf:hover{background:#5a8a5a}
+.btn-red{background:var(--red);color:var(--white)}.btn-red:hover{opacity:0.85}
+.btn:disabled{opacity:0.38;cursor:not-allowed}
+.btn+.btn{margin-top:6px}
+.btn-sm{padding:5px 12px;font-size:12px;width:auto}
+.btn-copy-all{display:flex;align-items:center;gap:6px;padding:9px 18px;border:none;border-radius:8px;font-family:'Noto Sans TC',sans-serif;font-size:13px;font-weight:500;cursor:pointer;background:var(--rose);color:var(--white);transition:all 0.2s;white-space:nowrap}
+.btn-copy-all:hover{background:var(--rose-dark)}
+.btn-copy-all.copied{background:var(--leaf)}
+.btn-regen{display:flex;align-items:center;gap:4px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;cursor:pointer;background:var(--white);color:var(--ink-mid);transition:all 0.18s;white-space:nowrap}
+.btn-regen:hover{border-color:var(--rose);color:var(--rose)}
+.btn-save-style{display:flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid #a8d4a8;border-radius:6px;font-family:'Noto Sans TC',sans-serif;font-size:11px;font-weight:500;cursor:pointer;background:var(--leaf-light);color:#3a7a3a;transition:all 0.18s;white-space:nowrap}
+.btn-save-style:hover{background:#d0e8d0}
+
+/* ── Progress ── */
+.prog-wrap{display:none;margin-top:8px}.prog-wrap.on{display:block}
+.prog-bar{width:100%;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;width:0%;background:var(--rose);border-radius:2px;transition:width 0.4s ease}
+.prog-msg{font-size:11px;color:var(--ink-light);margin-top:4px}
+
+/* ── Notice ── */
+.notice{background:var(--petal);border-radius:8px;padding:8px 11px;font-size:12px;color:var(--ink-mid);line-height:1.6;margin-bottom:8px}
+.notice-blue{background:var(--blue-light);border:1px solid var(--blue-border)}
+
+/* ── Status strip ── */
+.status-strip{background:var(--petal);border-top:1px solid var(--border);padding:7px 1.4rem;font-size:11px;color:var(--ink-mid);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--leaf);flex-shrink:0;transition:background 0.2s}
+.status-dot.busy{background:var(--rose);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── Main panel result ── */
+.main-inner{padding:1.75rem 2rem}
+.main-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px}
+.main-title{font-family:'Noto Serif TC',serif;font-size:17px;font-weight:600;color:var(--ink)}
+.mode-tag{font-size:11px;font-weight:500;padding:2px 8px;border-radius:99px;margin-left:6px}
+.mode-tag.mix{background:var(--gold-light);color:var(--gold);border:1px solid var(--gold-border)}
+.mode-tag.direct{background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)}
+.result-card{background:var(--white);border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;margin-bottom:1.25rem}
+.result-field{border-bottom:1px solid var(--border);padding:0.9rem 1.25rem}
+.result-field:last-child{border-bottom:none}
+.rf-label{font-size:11px;font-weight:500;color:var(--ink-light);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.rf-copy{font-size:11px;color:var(--rose);cursor:pointer;font-weight:400;letter-spacing:0;padding:2px 8px;border-radius:4px;border:1px solid var(--rose-light);transition:all 0.15s}
+.rf-copy:hover{background:var(--rose-light)}
+.rf-content{font-size:13px;color:var(--ink);line-height:1.85;white-space:pre-wrap}
+.rf-editable{width:100%;border:none;outline:none;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);line-height:1.85;resize:none;background:transparent;padding:0}
+.preview-label{font-size:11px;font-weight:500;color:var(--ink-light);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.preview-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.preview-textarea{width:100%;background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.25rem;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);line-height:1.9;resize:vertical;min-height:260px;outline:none;box-shadow:var(--shadow)}
+.preview-textarea:focus{border-color:var(--rose)}
+.main-section-label{font-size:11px;font-weight:500;color:var(--ink-light);letter-spacing:0.06em;text-transform:uppercase;margin:1.25rem 0 8px;display:flex;align-items:center;gap:6px}
+.main-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.img-results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.img-result-item{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:pointer;transition:transform 0.15s}
+.img-result-item:hover{transform:scale(1.03)}
+.img-result-item img{width:100%;height:100%;object-fit:cover}
+.open-link{position:absolute;inset:0;background:rgba(44,36,32,0);display:flex;align-items:center;justify-content:center;transition:background 0.15s;font-size:11px;color:#fff;font-weight:500}
+.img-result-item:hover .open-link{background:rgba(44,36,32,0.52)}
+.review-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:7px}
+.review-text{font-size:12px;color:var(--ink);line-height:1.65}
+.char-count{font-size:11px;color:var(--ink-light);text-align:right;margin-top:2px}
+.char-count.ok{color:var(--leaf)}.char-count.over{color:var(--rose)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:70vh;gap:10px;color:var(--ink-light);text-align:center}
+.empty-flower{font-size:44px;opacity:0.35}
+.saved-badge{display:none;font-size:11px;color:var(--leaf);margin-left:8px}
+.saved-badge.on{display:inline}
+
+/* ── Style library ── */
+.style-sample{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:7px}
+.style-sample-meta{font-size:11px;color:var(--ink-light);margin-bottom:4px;display:flex;align-items:center;justify-content:space-between}
+.style-sample-text{font-size:12px;color:var(--ink);line-height:1.6;white-space:pre-wrap;max-height:80px;overflow:hidden}
+.style-sample-rm{background:none;border:none;cursor:pointer;color:var(--ink-light);font-size:12px;padding:2px 5px}
+.style-sample-rm:hover{color:var(--rose)}
+.locked-notice{background:var(--red-light);border:1px solid var(--red-border);border-radius:8px;padding:12px 14px;text-align:center;font-size:13px;color:var(--red)}
+
+/* ── Order system ── */
+.order-page{flex:1;display:grid;grid-template-columns:1fr 380px;overflow:hidden}
+.order-left{overflow-y:auto;padding:1.5rem}
+.order-right{background:var(--white);border-left:1px solid var(--border);overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column}
+.product-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:10px;box-shadow:var(--shadow)}
+.product-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px}
+.product-card-name{font-size:14px;font-weight:500;color:var(--ink);flex:1;line-height:1.4}
+.product-card-price{font-size:13px;color:var(--rose);font-weight:500;white-space:nowrap}
+.variant-grid{display:grid;gap:6px}
+.variant-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--cream);border-radius:8px;border:1px solid var(--border)}
+.variant-label{flex:1;font-size:12px;color:var(--ink-mid)}
+.variant-qty{display:flex;align-items:center;gap:6px}
+.qty-btn{width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--white);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Noto Sans TC',sans-serif;transition:all 0.15s;color:var(--ink-mid)}
+.qty-btn:hover{border-color:var(--rose);color:var(--rose)}
+.qty-display{width:28px;text-align:center;font-size:13px;font-weight:500;color:var(--ink)}
+.qty-display.has-qty{color:var(--rose)}
+.order-summary-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--ink);margin-bottom:12px}
+.order-item{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);gap:8px}
+.order-item:last-of-type{border-bottom:none}
+.order-item-name{font-size:12px;color:var(--ink);flex:1;line-height:1.5}
+.order-item-qty{font-size:12px;color:var(--rose);font-weight:500;white-space:nowrap}
+.order-total{margin-top:10px;padding-top:10px;border-top:1.5px solid var(--border);display:flex;justify-content:space-between;font-weight:500;font-size:14px}
+.order-empty{font-size:13px;color:var(--ink-light);text-align:center;padding:2rem 0}
+.order-actions{margin-top:auto;padding-top:1rem;display:flex;flex-direction:column;gap:6px}
+.product-add-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--ink-mid);font-size:11px;font-family:'Noto Sans TC',sans-serif;cursor:pointer;transition:all 0.15s}
+.product-add-btn:hover{border-color:var(--leaf);color:var(--leaf)}
+.no-products{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ink-light);padding:3rem 1rem;text-align:center}
+
+/* ── Order image export ── */
+#orderCanvas{display:none}
+.export-preview{margin-top:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-width:100%}
+.export-preview img{width:100%;display:block}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(44,36,32,0.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--white);border-radius:14px;padding:1.75rem;width:100%;max-width:360px;box-shadow:var(--shadow-md)}
+.modal-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--ink-light);margin-bottom:1rem}
+.modal-actions{display:flex;gap:8px;margin-top:1rem}
+.modal-actions .btn{flex:1}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--ink);color:var(--white);padding:9px 16px;border-radius:8px;font-size:12px;font-weight:500;opacity:0;transform:translateY(6px);transition:all 0.22s;pointer-events:none;z-index:200}
+.toast.show{opacity:1;transform:translateY(0)}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr;height:auto;overflow:visible}
+  .order-page{grid-template-columns:1fr;height:auto}
+  .order-right{border-left:none;border-top:1px solid var(--border)}
+  .main-area{height:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     APP SHELL
+════════════════════════════════════════════ -->
+<div class="app-shell">
+
+  <!-- Top nav -->
+  <nav class="app-nav">
+    <div class="nav-logo">🌸 花開未滿團 <span>內部工具</span></div>
+    <div class="nav-tabs">
+      <div class="nav-tab active" onclick="switchPage('listing')">上架文產生</div>
+      <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
+    </div>
+    <div class="nav-right">
+      <button class="admin-btn" id="adminToggleBtn" onclick="toggleAdminMode()">🔒 管理員模式</button>
+    </div>
+  </nav>
+
+  <!-- ══════════ PAGE: LISTING ══════════ -->
+  <div class="page active" id="page-listing">
+    <div class="layout">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="inner-tabs">
+          <div class="inner-tab active" onclick="switchInnerTab('upload')">上架商品</div>
+          <div class="inner-tab" onclick="switchInnerTab('style')">文風庫</div>
+          <div class="inner-tab" onclick="switchInnerTab('settings')">團設定</div>
+        </div>
+        <div class="sidebar-body">
+
+          <!-- TAB: UPLOAD -->
+          <div class="tab-panel active" id="tab-upload">
+            <div class="section">
+              <div class="sec-label">商品照片（最多10張）</div>
+              <div class="upload-zone" id="dz" onclick="triggerUpload()">
+                <div class="upload-icon">📷</div>
+                <div class="upload-txt">點擊上傳或拖曳照片</div>
+                <div class="upload-sub">JPG · PNG · WEBP</div>
+              </div>
+              <div class="thumb-grid" id="thumbGrid" style="display:none"></div>
+              <input type="file" id="fi" accept="image/*" multiple style="display:none"/>
+            </div>
+
+            <div class="section">
+              <div class="sec-label">網路參考來源 <span class="badge badge-blue">選填</span></div>
+              <div class="notice" style="margin-bottom:6px">貼入 IG、FB、YouTube、官網等網址，AI 會抓取文字內容參考。</div>
+              <div class="url-input-row">
+                <input type="text" id="urlInput" placeholder="https://..." onkeydown="if(event.key==='Enter')addUrl()"/>
+                <button class="btn-add-url" onclick="addUrl()">新增</button>
+              </div>
+              <div class="url-tags" id="urlTags"></div>
+            </div>
+
+            <div class="section">
+              <div class="sec-label">廠商文案 <span class="badge badge-gold">選填</span></div>
+              <textarea id="supplierCopy" class="ta-gold" rows="4"
+                placeholder="把廠商提供的原始文案貼在這裡"></textarea>
+            </div>
+
+            <div class="section">
+              <div class="sec-label">文案模式</div>
+              <div class="mode-selector">
+                <div class="mode-btn selected" id="mode-mix" onclick="selectMode('mix')">
+                  <span class="mode-icon">✍️</span>
+                  <span class="mode-title">MIX 改寫</span>
+                  <span class="mode-desc">融合資訊用你的語氣重寫</span>
+                </div>
+                <div class="mode-btn" id="mode-direct" onclick="selectMode('direct')">
+                  <span class="mode-icon">📋</span>
+                  <span class="mode-title">直接沿用</span>
+                  <span class="mode-desc">廠商文案套固定格式</span>
+                </div>
+              </div>
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label">不搜尋網路資料</div>
+                  <div class="toggle-sub">服飾等商品可開啟</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="noSearch"/><span class="toggle-slider"></span></label>
+              </div>
+              <div class="notice" id="modeNotice">AI 會參考所有來源，用你的語氣重新寫，字數 300〜500 字。</div>
+            </div>
+
+            <div class="section">
+              <button class="btn btn-dark" id="aiBtn" onclick="runAI()">✦ AI 識別 + 產生資訊</button>
+              <div class="prog-wrap" id="progWrap">
+                <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+                <div class="prog-msg" id="progMsg"></div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="sec-label">商品資訊確認</div>
+              <div class="field-row">
+                <label>商品名稱</label>
+                <input type="text" id="prodName" placeholder="例：韓國・LOTTE 杜拜巧克力Q派"/>
+                <div style="font-size:11px;color:var(--ink-light);margin-top:2px">格式：國家・品牌 商品名</div>
+              </div>
+              <div class="row2">
+                <div class="field-row"><label>容量 / 規格</label><input type="text" id="prodVol" placeholder="例：10入"/></div>
+                <div class="field-row"><label>售價（NT）</label><input type="text" id="prodPrice" placeholder="例：388元/盒"/></div>
+              </div>
+              <div class="field-row">
+                <label>商品介紹文</label>
+                <textarea id="prodDesc" rows="6" placeholder="AI 產生後可修改" oninput="updateCharCount()"></textarea>
+                <div class="char-count" id="charCount">0 字</div>
+              </div>
+            </div>
+
+            <button class="btn btn-rose" onclick="buildPost()">產生完整上架文 →</button>
+            <button class="btn btn-outline" onclick="clearListing()">清除重來</button>
+          </div>
+
+          <!-- TAB: STYLE LIBRARY -->
+          <div class="tab-panel" id="tab-style">
+            <div id="styleAdminArea">
+              <!-- shown/hidden by admin mode -->
+            </div>
+          </div>
+
+          <!-- TAB: SETTINGS -->
+          <div class="tab-panel" id="tab-settings">
+            <div class="notice">每次開新團更新一次，之後產生的文案自動套用。</div>
+            <div class="section">
+              <div class="sec-label">開團名稱</div>
+              <div class="field-row"><label>團名（# 標籤同步）</label><input type="text" id="cfg-teamname" value="花開未滿團"/></div>
+              <div class="field-row"><label>本團結單 / 出貨說明</label><input type="text" id="cfg-cutoff" value="四月下旬結單，五月上旬理貨後開始出貨"/></div>
+            </div>
+            <div class="section">
+              <div class="sec-label">固定中段文字</div>
+              <textarea id="cfg-mid" rows="5">下單請喊款式、數量
+EX：+1
+【結單日】隨時收單
+【出貨日】花開未滿團
+#下單前請詳閱文章底部開團說明</textarea>
+            </div>
+            <div class="section">
+              <div class="sec-label">底部說明（※ 條款）</div>
+              <textarea id="cfg-notes" rows="10">※花開未滿團結單時間或有異動，本社團會依據廠商到貨狀況斟酌調整結單時間，或有可能延後5-7天，以實際結單發布日期為準
+※花開未滿團實際的上架內容與連線時間以本社團公布為主，本社團保有調整、修改的權利
+※花開未滿團四月下旬結單，五月上旬理貨後開始出貨
+※出貨時有可能會遇到我們下單時廠商庫存有變動，或是我們清點短少、出貨有瑕疵、到貨數量不足..等狀況，如遇到以上情況，我們會以斷貨或是轉購物金處理，可接受者再喊單喔
+※不與前單併單/不接急單
+※喊單後如有誤請私訊花霓/花露水處理
+※無法接受者請勿喊單</textarea>
+            </div>
+            <button class="btn btn-rose" onclick="saveSettings()">儲存設定 <span class="saved-badge" id="savedBadge">✓ 已儲存</span></button>
+            <button class="btn btn-outline" onclick="exportSettings()" style="margin-top:6px">匯出設定檔</button>
+            <button class="btn btn-outline" onclick="document.getElementById('importFile').click()" style="margin-top:6px">匯入設定檔</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importSettings(event)"/>
+          </div>
+
+        </div>
+        <div class="status-strip">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusTxt">就緒</span>
+        </div>
+      </div>
+
+      <!-- Main result area -->
+      <div class="main-area">
+        <div class="main-inner">
+          <div id="emptyState" class="empty">
+            <div class="empty-flower">🌸</div>
+            <div style="font-size:13px">上傳照片並填入資訊後<br>按「產生完整上架文」</div>
+          </div>
+          <div id="resultPanel" style="display:none">
+            <div class="main-header">
+              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+                <div class="main-title">完整上架文</div>
+                <span class="mode-tag" id="resultModeTag"></span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-regen" onclick="regenDesc()">↺ 重新產生</button>
+                <button class="btn-copy-all" id="copyAllBtn" onclick="copyAll()">📋 複製全文</button>
+              </div>
+            </div>
+            <div class="result-card">
+              <div class="result-field">
+                <div class="rf-label">標題行 <span class="rf-copy" onclick="copyField('rf-title')">複製</span></div>
+                <div class="rf-content" id="rf-title"></div>
+              </div>
+              <div class="result-field">
+                <div class="rf-label">
+                  <span>商品介紹</span>
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                    <span id="rf-char" style="font-size:11px;color:var(--ink-light)"></span>
+                    <button class="btn-save-style" id="saveStyleBtn" onclick="saveFromResult()">+ 存入文風庫</button>
+                    <span class="rf-copy" onclick="copyFieldTA('rf-intro')">複製</span>
+                  </div>
+                </div>
+                <textarea class="rf-editable" id="rf-intro" rows="8" oninput="onIntroEdit()"></textarea>
+              </div>
+              <div class="result-field">
+                <div class="rf-label">容量 &amp; 訂購資訊 <span class="rf-copy" onclick="copyField('rf-spec')">複製</span></div>
+                <div class="rf-content" id="rf-spec"></div>
+              </div>
+              <div class="result-field">
+                <div class="rf-label">底部說明 <span class="rf-copy" onclick="copyField('rf-notes')">複製</span></div>
+                <div class="rf-content" id="rf-notes"></div>
+              </div>
+            </div>
+            <div class="preview-label">完整預覽（可直接編輯）</div>
+            <textarea class="preview-textarea" id="fullPreview"></textarea>
+            <div id="imgResultSection" style="display:none">
+              <div class="main-section-label">搜尋到的商品圖片</div>
+              <div class="img-results" id="imgResultGrid"></div>
+            </div>
+            <div id="reviewSection" style="display:none">
+              <div class="main-section-label">網友心得參考</div>
+              <div id="reviewCards"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ PAGE: ORDER ══════════ -->
+  <div class="page" id="page-order">
+    <div class="order-page">
+      <!-- Left: product list -->
+      <div class="order-left">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+          <div class="main-title">訂貨管理</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-dark btn-sm" onclick="showAddProductModal()">+ 新增商品</button>
+            <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空數量</button>
+          </div>
+        </div>
+        <div class="notice notice-blue" style="margin-bottom:1rem">上架的商品統一在這裡管理。點 ＋／－ 填入各款式訂購數量，右側會即時統計，最後輸出成訂貨圖片給廠商。</div>
+        <div id="productList">
+          <div class="no-products">
+            <div style="font-size:36px;opacity:0.3">📦</div>
+            <div style="font-size:13px">還沒有商品<br>按「新增商品」或從上架文產生頁同步</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: order summary -->
+      <div class="order-right">
+        <div class="order-summary-title">📋 本次訂貨彙總</div>
+        <div id="orderSummary"><div class="order-empty">尚未填入數量</div></div>
+        <div class="order-actions">
+          <button class="btn btn-rose" onclick="exportOrderImage()">輸出訂貨圖片</button>
+          <button class="btn btn-outline" onclick="copyOrderText()">複製訂貨文字</button>
+          <div id="exportPreview" class="export-preview" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end app-shell -->
+
+<!-- ── Modals ── -->
+<!-- Admin login -->
+<div class="modal-overlay hidden" id="adminModal">
+  <div class="modal">
+    <div class="modal-title">🔒 管理員登入</div>
+    <div class="modal-sub">請輸入管理員密碼以使用文風庫功能</div>
+    <div class="field-row">
+      <input type="password" id="adminPwInput" placeholder="密碼" onkeydown="if(event.key==='Enter')submitAdminPw()"/>
+    </div>
+    <div style="font-size:11px;color:var(--ink-light);margin-bottom:4px" id="adminPwHint"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('adminModal')">取消</button>
+      <button class="btn btn-rose" onclick="submitAdminPw()">登入</button>
+    </div>
+  </div>
+</div>
+
+<!-- Set password (first time) -->
+<div class="modal-overlay hidden" id="setPwModal">
+  <div class="modal">
+    <div class="modal-title">設定管理員密碼</div>
+    <div class="modal-sub">第一次使用請設定你的管理員密碼，小幫手不知道密碼就無法編輯文風庫。</div>
+    <div class="field-row"><input type="password" id="newPw1" placeholder="輸入密碼"/></div>
+    <div class="field-row"><input type="password" id="newPw2" placeholder="再輸入一次確認"/></div>
+    <div style="font-size:11px;color:var(--rose);margin-bottom:4px" id="setPwHint"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('setPwModal')">取消</button>
+      <button class="btn btn-rose" onclick="confirmSetPw()">設定密碼</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add product -->
+<div class="modal-overlay hidden" id="addProductModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">新增商品</div>
+    <div class="modal-sub">填入商品基本資訊與款式規格</div>
+    <div class="field-row"><label>商品名稱</label><input type="text" id="ap-name" placeholder="例：韓國・LOTTE 杜拜巧克力Q派"/></div>
+    <div class="row2">
+      <div class="field-row"><label>廠商</label><input type="text" id="ap-vendor" placeholder="例：LOTTE"/></div>
+      <div class="field-row"><label>單價</label><input type="text" id="ap-price" placeholder="例：388元"/></div>
+    </div>
+    <div class="field-row">
+      <label>款式 / 規格（每行一個，例如顏色或尺寸）</label>
+      <textarea id="ap-variants" rows="4" placeholder="米色&#10;黑色&#10;深藍&#10;咖啡&#10;淺藍&#10;灰色&#10;&#10;若只有單一款式，留空即可"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('addProductModal')">取消</button>
+      <button class="btn btn-rose" onclick="confirmAddProduct()">新增</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="orderCanvas"></canvas>
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONSTANTS & STATE
+// ══════════════════════════════════════════════
+const ADMIN_PW_KEY = 'huakai_admin_pw';
+const SETTINGS_KEY = 'huakai_v4_settings';
+const STYLE_KEY    = 'huakai_v4_style';
+const PRODUCTS_KEY = 'huakai_v4_products';
+
+let imgs = [], refUrls = [], currentMode = 'mix', currentResult = {};
+let styleSamples = [], products = [];
+let isAdmin = false;
+
+// ══════════════════════════════════════════════
+// STYLE PROMPT
+// ══════════════════════════════════════════════
+const STYLE_PROMPT = `
+【文字風格規則，必須嚴格遵守】
+1. 語氣像朋友真心推薦，不像官方廣告，要讓人覺得你自己試過、有感覺。
+2. 開頭用生活情境或有畫面感的話吸引注意，或舉例這個商品在國外流行的現象或文化背景。
+3. 文字帶一點幽默與生活感，但不浮誇、不過度驚嘆。
+4. 商品特色自然帶出，不要生硬條列，要融進敘述中。
+5. 幫客人想使用情境（自用、送禮、日常、旅行等），選最貼切的自然帶入一種。
+6. 嚴禁使用「不是……而是……」對比句型。嚴禁使用破折號「—」。
+7. 整體要有溫度，可適時用「算算」「老實說」「這個...」「說真的」「其實」等口語詞，但不要每句都用。
+8. 字數控制在 300～500 字之間。
+9. 結尾可以自然引導購買，但不強迫，非必要，偶爾出現即可。
+10. 整篇不要超過兩組「」引號。
+11. 嚴禁 AI 腔調：「不僅如此」「值得一提」「毋庸置疑」「令人」「帶來」「呈現」「完美」「卓越」「無論是」「無可挑剔」。
+【如果是保養品或美妝品，額外加入】
+若商品含成分資訊：挑出 1～3 個關鍵成分；用口語解釋功效；成分說明融入內文；加一句適合什麼膚況的人用；避免過度醫療或誇大說法。
+`;
+
+function getStyleExamplesBlock() {
+  if (!styleSamples.length) return '';
+  const recent = styleSamples.slice(-5);
+  return '\n\n【主人的文風範例，請模仿語氣、句型和用字】\n' +
+    recent.map((s,i)=>`範例${i+1}${s.tag?`（${s.tag}）`:''}\n${s.text.slice(0,300)}${s.text.length>300?'...':''}`).join('\n\n') +
+    '\n【範例結束，依此風格寫新文案】\n';
+}
+
+// ══════════════════════════════════════════════
+// PAGES & TABS
+// ══════════════════════════════════════════════
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', ['listing','order'][i]===name));
+  if (name==='order') renderProducts();
+}
+
+function switchInnerTab(name) {
+  const names = ['upload','style','settings'];
+  document.querySelectorAll('.inner-tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name==='style') renderStyleTab();
+}
+
+// ══════════════════════════════════════════════
+// ADMIN MODE
+// ══════════════════════════════════════════════
+function toggleAdminMode() {
+  if (isAdmin) { isAdmin=false; updateAdminUI(); showToast('已退出管理員模式'); return; }
+  const stored = localStorage.getItem(ADMIN_PW_KEY);
+  if (!stored) { openModal('setPwModal'); }
+  else { openModal('adminModal'); document.getElementById('adminPwHint').textContent=''; document.getElementById('adminPwInput').value=''; }
+}
+
+function submitAdminPw() {
+  const val = document.getElementById('adminPwInput').value;
+  const stored = localStorage.getItem(ADMIN_PW_KEY);
+  if (val === stored) {
+    isAdmin = true; closeModal('adminModal'); updateAdminUI(); showToast('管理員模式已開啟');
+  } else {
+    document.getElementById('adminPwHint').textContent = '密碼錯誤，請再試一次';
+  }
+}
+
+function confirmSetPw() {
+  const p1 = document.getElementById('newPw1').value;
+  const p2 = document.getElementById('newPw2').value;
+  const hint = document.getElementById('setPwHint');
+  if (!p1) { hint.textContent='請輸入密碼'; return; }
+  if (p1 !== p2) { hint.textContent='兩次密碼不一致'; return; }
+  localStorage.setItem(ADMIN_PW_KEY, p1);
+  isAdmin = true; closeModal('setPwModal'); updateAdminUI(); showToast('密碼設定完成，管理員模式已開啟');
+}
+
+function updateAdminUI() {
+  const btn = document.getElementById('adminToggleBtn');
+  if (isAdmin) {
+    btn.textContent = '🔓 管理員模式（點擊退出）';
+    btn.classList.add('active-admin');
+  } else {
+    btn.textContent = '🔒 管理員模式';
+    btn.classList.remove('active-admin');
+  }
+  // Update save style button visibility
+  const ssBtn = document.getElementById('saveStyleBtn');
+  if (ssBtn) ssBtn.style.display = isAdmin ? '' : 'none';
+  renderStyleTab();
+}
+
+// ══════════════════════════════════════════════
+// STYLE LIBRARY
+// ══════════════════════════════════════════════
+function renderStyleTab() {
+  const area = document.getElementById('styleAdminArea');
+  if (!isAdmin) {
+    area.innerHTML = `
+      <div class="locked-notice" style="margin-top:1rem">
+        🔒 文風庫編輯需要管理員權限<br>
+        <div style="font-size:12px;margin-top:6px;opacity:0.8">請點右上角「管理員模式」並輸入密碼</div>
+      </div>
+      <div style="margin-top:1rem">
+        <div class="sec-label">已儲存範例</div>
+        <div style="font-size:12px;color:var(--ink-light)">共 ${styleSamples.length} 篇範例（唯讀）</div>
+        ${styleSamples.length===0?'<div style="font-size:12px;color:var(--ink-light);text-align:center;padding:1rem 0">尚無範例</div>':
+          [...styleSamples].reverse().map(s=>`<div class="style-sample"><div class="style-sample-meta">${s.tag?`<span class="badge badge-rose">${s.tag}</span> `:''} ${s.date}</div><div class="style-sample-text">${s.text.replace(/</g,'&lt;').slice(0,120)}...</div></div>`).join('')}
+      </div>`;
+    return;
+  }
+  area.innerHTML = `
+    <div class="notice" style="margin-top:0.5rem">把修改後滿意的上架文存進來，AI 下次產文案時會參考這些範例，越存越像你的風格。</div>
+    <div class="section">
+      <div class="sec-label">新增範例</div>
+      <div class="field-row"><label>商品類型標籤</label><input type="text" id="styleTag" placeholder="例：食品、美妝、服飾"/></div>
+      <div class="field-row"><label>貼入滿意的介紹文</label><textarea id="styleInput" class="ta-leaf" rows="6" placeholder="把你改完後覺得對味的那段文字貼在這裡..."></textarea></div>
+      <button class="btn btn-leaf" onclick="saveStyleSample()">存入文風庫</button>
+    </div>
+    <div class="section">
+      <div class="sec-label">已儲存範例</div>
+      <div style="font-size:12px;color:var(--ink-light);margin-bottom:6px">共 <span style="color:var(--rose);font-weight:500">${styleSamples.length}</span> 篇</div>
+      <div id="styleList">${renderStyleListHTML()}</div>
+      <button class="btn btn-outline" onclick="exportStyleLib()" style="margin-top:4px">匯出文風庫備份</button>
+      <button class="btn btn-outline" onclick="document.getElementById('importStyleFile').click()" style="margin-top:6px">匯入文風庫</button>
+      <input type="file" id="importStyleFile" accept=".json" style="display:none" onchange="importStyleLib(event)"/>
+    </div>`;
+}
+
+function renderStyleListHTML() {
+  if (!styleSamples.length) return '<div style="font-size:12px;color:var(--ink-light);text-align:center;padding:1rem 0">還沒有範例，存入第一篇後文風會越來越準</div>';
+  return [...styleSamples].reverse().map(s=>`
+    <div class="style-sample">
+      <div class="style-sample-meta">
+        <span>${s.tag?`<span class="badge badge-rose">${s.tag}</span> `:''}${s.date}</span>
+        <button class="style-sample-rm" onclick="removeStyleSample(${s.id})">✕ 刪除</button>
+      </div>
+      <div class="style-sample-text">${s.text.replace(/</g,'&lt;')}</div>
+    </div>`).join('');
+}
+
+function saveStyleSample() {
+  if (!isAdmin) { showToast('需要管理員權限'); return; }
+  const text = document.getElementById('styleInput')?.value.trim();
+  const tag = document.getElementById('styleTag')?.value.trim();
+  if (!text) { showToast('請先貼入文案範例'); return; }
+  styleSamples.push({id:Date.now(), tag, text, date:new Date().toLocaleDateString('zh-TW')});
+  localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  renderStyleTab(); showToast('已存入文風庫 ✓');
+}
+
+function saveFromResult() {
+  if (!isAdmin) { showToast('需要管理員權限才能存入文風庫'); return; }
+  const text = document.getElementById('rf-intro').value.trim();
+  if (!text) { showToast('介紹文為空'); return; }
+  switchInnerTab('style');
+  setTimeout(() => {
+    const tag = (document.getElementById('prodName').value.split('・').pop()||'').split(' ')[0];
+    if (document.getElementById('styleTag')) document.getElementById('styleTag').value = tag;
+    if (document.getElementById('styleInput')) document.getElementById('styleInput').value = text;
+    showToast('已帶入，確認後按「存入文風庫」');
+  }, 100);
+}
+
+function removeStyleSample(id) {
+  if (!isAdmin) return;
+  styleSamples = styleSamples.filter(s=>s.id!==id);
+  localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  renderStyleTab();
+}
+
+function exportStyleLib() {
+  download('花開未滿團文風庫.json', JSON.stringify(styleSamples, null, 2));
+}
+
+function importStyleLib(e) {
+  readJSON(e.target.files[0], arr => {
+    if (Array.isArray(arr)) {
+      styleSamples = [...styleSamples, ...arr];
+      localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+      renderStyleTab(); showToast(`匯入 ${arr.length} 篇範例`);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');
+    if (s.teamname) document.getElementById('cfg-teamname').value=s.teamname;
+    if (s.cutoff) document.getElementById('cfg-cutoff').value=s.cutoff;
+    if (s.mid) document.getElementById('cfg-mid').value=s.mid;
+    if (s.notes) document.getElementById('cfg-notes').value=s.notes;
+  } catch(e){}
+  try { styleSamples = JSON.parse(localStorage.getItem(STYLE_KEY)||'[]'); } catch(e){}
+  try { products = JSON.parse(localStorage.getItem(PRODUCTS_KEY)||'[]'); } catch(e){}
+}
+
+function getSettings() {
+  return {
+    teamname: document.getElementById('cfg-teamname').value.trim()||'花開未滿團',
+    cutoff: document.getElementById('cfg-cutoff').value.trim(),
+    mid: document.getElementById('cfg-mid').value.trim(),
+    notes: document.getElementById('cfg-notes').value.trim()
+  };
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(getSettings()));
+  const b=document.getElementById('savedBadge'); b.classList.add('on');
+  setTimeout(()=>b.classList.remove('on'),2500); showToast('設定已儲存');
+}
+
+function exportSettings() { download('花開未滿團設定.json', JSON.stringify(getSettings(),null,2)); }
+function importSettings(e) {
+  readJSON(e.target.files[0], s => {
+    if(s.teamname) document.getElementById('cfg-teamname').value=s.teamname;
+    if(s.cutoff) document.getElementById('cfg-cutoff').value=s.cutoff;
+    if(s.mid) document.getElementById('cfg-mid').value=s.mid;
+    if(s.notes) document.getElementById('cfg-notes').value=s.notes;
+    saveSettings(); showToast('設定匯入成功');
+  });
+}
+
+// ══════════════════════════════════════════════
+// LISTING: UPLOAD
+// ══════════════════════════════════════════════
+const dz=document.getElementById('dz'), fi=document.getElementById('fi');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');handleFiles(e.dataTransfer.files)});
+fi.addEventListener('change',e=>{handleFiles(e.target.files);fi.value='';});
+function triggerUpload(){if(imgs.length>=10){showToast('最多10張');return;}fi.click();}
+function handleFiles(files){
+  Array.from(files).forEach(f=>{
+    if(!f.type.startsWith('image/')||imgs.length>=10)return;
+    const r=new FileReader();
+    r.onload=ev=>{imgs.push({id:Date.now()+Math.random(),b64:ev.target.result,type:f.type});renderThumbs();};
+    r.readAsDataURL(f);
+  });
+}
+function renderThumbs(){
+  const g=document.getElementById('thumbGrid');
+  if(!imgs.length){dz.style.display='block';g.style.display='none';g.innerHTML='';return;}
+  dz.style.display='none';g.style.display='grid';g.innerHTML='';
+  imgs.forEach(img=>{
+    const d=document.createElement('div');d.className='thumb';
+    d.innerHTML=`<img src="${img.b64}"/><button class="thumb-rm" onclick="rmImg(${img.id})">✕</button>`;
+    g.appendChild(d);
+  });
+  if(imgs.length<10){const a=document.createElement('div');a.className='add-more';a.textContent='+';a.onclick=triggerUpload;g.appendChild(a);}
+}
+function rmImg(id){imgs=imgs.filter(i=>i.id!==id);renderThumbs();}
+
+// URL
+function addUrl(){
+  const inp=document.getElementById('urlInput'),url=inp.value.trim();
+  if(!url)return;
+  if(!url.startsWith('http')){showToast('請輸入完整網址');return;}
+  if(refUrls.includes(url)){showToast('已加入');inp.value='';return;}
+  if(refUrls.length>=5){showToast('最多5個');return;}
+  refUrls.push(url);inp.value='';renderUrlTags();
+}
+function removeUrl(url){refUrls=refUrls.filter(u=>u!==url);renderUrlTags();}
+function renderUrlTags(){
+  const c=document.getElementById('urlTags');c.innerHTML='';
+  refUrls.forEach(url=>{
+    const d=document.createElement('div');d.className='url-tag';
+    const domain=url.replace(/https?:\/\//,'').split('/')[0];
+    d.innerHTML=`<span title="${url}">${domain}</span><button class="url-tag-rm" onclick="removeUrl('${url.replace(/'/g,"\\'")}')">✕</button>`;
+    c.appendChild(d);
+  });
+}
+
+// Mode
+function selectMode(m){
+  currentMode=m;
+  document.getElementById('mode-mix').classList.toggle('selected',m==='mix');
+  document.getElementById('mode-direct').classList.toggle('selected',m==='direct');
+  document.getElementById('modeNotice').textContent=m==='mix'
+    ?'AI 會參考所有來源，用你的語氣重新寫，字數 300〜500 字。'
+    :'廠商文案直接套上固定格式，不改寫內容。';
+}
+
+// Status/progress
+function setStatus(msg,busy=false){
+  document.getElementById('statusTxt').textContent=msg;
+  document.getElementById('statusDot').className='status-dot'+(busy?' busy':'');
+}
+function setProgress(pct,msg=''){
+  const w=document.getElementById('progWrap');
+  if(pct<=0){w.classList.remove('on');return;}
+  w.classList.add('on');
+  document.getElementById('progFill').style.width=pct+'%';
+  if(msg)document.getElementById('progMsg').textContent=msg;
+}
+function updateCharCount(){
+  const len=document.getElementById('prodDesc').value.length;
+  const el=document.getElementById('charCount');
+  el.textContent=`${len} 字`;
+  el.className='char-count'+(len>=300&&len<=500?' ok':len>500?' over':'');
+}
+
+// ══════════════════════════════════════════════
+// LISTING: AI
+// ══════════════════════════════════════════════
+async function runAI(){
+  const supplierCopy=document.getElementById('supplierCopy').value.trim();
+  const noSearch=document.getElementById('noSearch').checked;
+  if(!imgs.length&&!supplierCopy&&!refUrls.length){showToast('請上傳照片、貼廠商文案，或加入網路來源');return;}
+  const btn=document.getElementById('aiBtn');
+  btn.disabled=true;setStatus('AI 識別中...',true);setProgress(10,'準備中...');
+  const s=getSettings();
+  const imgBlocks=imgs.slice(0,4).map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.b64.split(',')[1]}}));
+  const supplierSection=supplierCopy?`\n廠商文案（${currentMode==='direct'?'直接沿用':'參考用，不要照抄'}）：\n"""\n${supplierCopy}\n"""\n`:'';
+  const urlSection=refUrls.length?`\n參考網址：\n${refUrls.map((u,i)=>`${i+1}. ${u}`).join('\n')}\n`:'';
+  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請搜尋這個商品的台灣網友評價（PTT、Dcard、FB社團）和商品圖片 URL（3〜6 個）。`;
+  const modeInstruction=currentMode==='direct'?'文案模式：直接沿用廠商文案，只做格式調整。':`文案模式：MIX 改寫。${STYLE_PROMPT}${getStyleExamplesBlock()}`;
+  const prompt=`你是「${s.teamname}」的上架文案小幫手。${supplierSection}${urlSection}
+任務：1. 分析照片（若有）  2. ${searchInstruction}
+${modeInstruction}
+請以繁體中文回覆，格式為純 JSON，不要 markdown：
+{"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","desc":"完整商品介紹文","reviews":["網友心得"],"image_urls":["圖片URL"]}`;
+  try{
+    setProgress(25,noSearch?'分析資訊中...':'搜尋商品資訊 + 網友心得...');
+    const body={model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:[...imgBlocks,{type:'text',text:prompt}]}]};
+    if(!noSearch)body.tools=[{type:'web_search_20250305',name:'web_search'}];
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    setProgress(75,'整理結果中...');
+    const data=await res.json();
+    const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    let parsed={};
+    try{const m=raw.match(/\{[\s\S]*\}/);if(m)parsed=JSON.parse(m[0]);}catch(e){console.error(e);}
+    if(parsed.country&&parsed.name)document.getElementById('prodName').value=`${parsed.country}・${parsed.name}`;
+    else if(parsed.name)document.getElementById('prodName').value=parsed.name;
+    if(parsed.volume)document.getElementById('prodVol').value=parsed.volume;
+    if(parsed.desc){document.getElementById('prodDesc').value=parsed.desc;updateCharCount();}
+    currentResult.reviews=parsed.reviews||[];
+    currentResult.imageUrls=parsed.image_urls||[];
+    setProgress(100,'完成！');setStatus('識別完成，請確認資訊');
+    setTimeout(()=>setProgress(0),700);showToast('商品資訊已填入，請確認後填入售價');
+  }catch(e){setStatus('識別失敗');setProgress(0);showToast('AI 識別失敗，請手動填入');console.error(e);}
+  btn.disabled=false;
+}
+
+async function regenDesc(){
+  const name=document.getElementById('prodName').value.trim();
+  const supplierCopy=document.getElementById('supplierCopy').value.trim();
+  const s=getSettings();
+  setStatus('重新產生文案...',true);
+  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock()}`;
+  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n請只輸出商品介紹文本身，不要 JSON 或標題。`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    document.getElementById('prodDesc').value=text;
+    document.getElementById('rf-intro').value=`#${s.teamname}=>點此看本團所有商品\n${text}`;
+    updateCharCount();updateRfCharCount(document.getElementById('rf-intro').value);syncPreview();
+    setStatus('文案已更新');showToast('介紹文已重新產生');
+  }catch(e){setStatus('就緒');showToast('重新產生失敗');}
+}
+
+// ══════════════════════════════════════════════
+// LISTING: BUILD POST
+// ══════════════════════════════════════════════
+function buildPost(){
+  const name=document.getElementById('prodName').value.trim();
+  const vol=document.getElementById('prodVol').value.trim();
+  const price=document.getElementById('prodPrice').value.trim();
+  const desc=document.getElementById('prodDesc').value.trim();
+  const s=getSettings();
+  if(!name){showToast('請填入商品名稱');return;}
+  if(!price){showToast('請填入售價');return;}
+  const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
+  const titleLine=`${s.teamname}｜${name}　${pf}`;
+  const introBlock=`#${s.teamname}=>點此看本團所有商品\n${desc}`;
+  const specBlock=`【容量】${vol||'請補充'}\n【開團價】${pf}\n${s.mid}`;
+  document.getElementById('rf-title').textContent=titleLine;
+  document.getElementById('rf-intro').value=introBlock;
+  document.getElementById('rf-spec').textContent=specBlock;
+  document.getElementById('rf-notes').textContent=s.notes;
+  const tag=document.getElementById('resultModeTag');
+  tag.textContent=currentMode==='mix'?'MIX 改寫版':'直接沿用版';
+  tag.className='mode-tag '+currentMode;
+  updateRfCharCount(introBlock);
+  document.getElementById('fullPreview').value=[titleLine,introBlock,'',specBlock,s.notes].join('\n');
+  if(currentResult.imageUrls?.length){renderImageResults(currentResult.imageUrls);document.getElementById('imgResultSection').style.display='block';}
+  if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resultPanel').style.display='block';
+  setStatus('文案已產生');
+  document.querySelector('.main-area').scrollTop=0;
+  updateAdminUI();
+}
+
+function updateRfCharCount(text){
+  const len=text.length,el=document.getElementById('rf-char');
+  el.textContent=`${len} 字`;
+  el.style.color=len>=300&&len<=500?'#7A9E7E':len>500?'#C9826B':'#9C8880';
+}
+function onIntroEdit(){updateRfCharCount(document.getElementById('rf-intro').value);syncPreview();}
+function syncPreview(){
+  const t=document.getElementById('rf-title').textContent;
+  const i=document.getElementById('rf-intro').value;
+  const s=document.getElementById('rf-spec').textContent;
+  const n=document.getElementById('rf-notes').textContent;
+  document.getElementById('fullPreview').value=[t,i,'',s,n].join('\n');
+}
+function renderImageResults(urls){
+  const g=document.getElementById('imgResultGrid');g.innerHTML='';
+  urls.slice(0,9).forEach(url=>{
+    if(!url?.startsWith('http'))return;
+    const item=document.createElement('div');item.className='img-result-item';
+    item.onclick=()=>window.open(url,'_blank');
+    item.innerHTML=`<img src="${url}" onerror="this.parentElement.style.display='none'" loading="lazy"/><div class="open-link">開啟原頁</div>`;
+    g.appendChild(item);
+  });
+}
+function renderReviews(reviews){
+  const c=document.getElementById('reviewCards');c.innerHTML='';
+  reviews.forEach(r=>{const d=document.createElement('div');d.className='review-card';d.innerHTML=`<div class="review-text">${r}</div>`;c.appendChild(d);});
+}
+function clearListing(){
+  imgs=[];currentResult={};refUrls=[];renderThumbs();renderUrlTags();
+  ['prodName','prodVol','prodPrice','prodDesc','supplierCopy'].forEach(id=>document.getElementById(id).value='');
+  updateCharCount();
+  document.getElementById('emptyState').style.display='flex';
+  document.getElementById('resultPanel').style.display='none';
+  document.getElementById('imgResultSection').style.display='none';
+  document.getElementById('reviewSection').style.display='none';
+  setStatus('就緒');
+}
+
+// ══════════════════════════════════════════════
+// ORDER SYSTEM
+// ══════════════════════════════════════════════
+function showAddProductModal(){openModal('addProductModal');['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');}
+
+function confirmAddProduct(){
+  const name=document.getElementById('ap-name').value.trim();
+  const vendor=document.getElementById('ap-vendor').value.trim();
+  const price=document.getElementById('ap-price').value.trim();
+  const variantRaw=document.getElementById('ap-variants').value.trim();
+  if(!name){showToast('請填入商品名稱');return;}
+  const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
+  const product={
+    id:Date.now(),name,vendor,price,
+    variants:variants.map(v=>({label:v,qty:0}))
+  };
+  products.push(product);
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
+}
+
+function renderProducts(){
+  const list=document.getElementById('productList');
+  if(!products.length){
+    list.innerHTML=`<div class="no-products"><div style="font-size:36px;opacity:0.3">📦</div><div style="font-size:13px">還沒有商品<br>按「新增商品」開始建立</div></div>`;
+    return;
+  }
+  list.innerHTML=products.map((p,pi)=>`
+    <div class="product-card">
+      <div class="product-card-header">
+        <div>
+          <div class="product-card-name">${p.name}</div>
+          ${p.vendor?`<div style="font-size:11px;color:var(--ink-light);margin-top:2px">${p.vendor}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${p.price?`<span class="product-card-price">${p.price}</span>`:''}
+          <button class="product-add-btn" style="color:var(--red);border-color:var(--red-border)" onclick="removeProduct(${pi})">✕ 刪除</button>
+        </div>
+      </div>
+      <div class="variant-grid">
+        ${p.variants.map((v,vi)=>`
+          <div class="variant-row">
+            <div class="variant-label">${v.label}</div>
+            <div class="variant-qty">
+              <button class="qty-btn" onclick="changeQty(${pi},${vi},-1)">−</button>
+              <div class="qty-display ${v.qty>0?'has-qty':''}" id="qty-${pi}-${vi}">${v.qty}</div>
+              <button class="qty-btn" onclick="changeQty(${pi},${vi},1)">＋</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function changeQty(pi,vi,delta){
+  products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  const el=document.getElementById(`qty-${pi}-${vi}`);
+  if(el){el.textContent=products[pi].variants[vi].qty;el.className='qty-display'+(products[pi].variants[vi].qty>0?' has-qty':'');}
+  renderOrderSummary();
+}
+
+function removeProduct(pi){
+  products.splice(pi,1);
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  renderProducts();renderOrderSummary();
+}
+
+function clearAllOrders(){
+  products.forEach(p=>p.variants.forEach(v=>v.qty=0));
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  renderProducts();renderOrderSummary();showToast('已清空所有數量');
+}
+
+function renderOrderSummary(){
+  const container=document.getElementById('orderSummary');
+  const items=[];
+  products.forEach(p=>{
+    p.variants.forEach(v=>{
+      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price,vendor:p.vendor});
+    });
+  });
+  if(!items.length){container.innerHTML='<div class="order-empty">尚未填入數量</div>';return;}
+  container.innerHTML=`
+    ${items.map(item=>`
+      <div class="order-item">
+        <div class="order-item-name">${item.name}${item.variant&&item.variant!=='單一款式'?`<br><span style="color:var(--ink-light)">${item.variant}</span>`:''}</div>
+        <div class="order-item-qty">× ${item.qty}</div>
+      </div>`).join('')}
+    <div class="order-total"><span>共 ${items.reduce((a,i)=>a+i.qty,0)} 件</span><span>${items.length} 項商品</span></div>`;
+}
+
+function copyOrderText(){
+  const items=[];
+  products.forEach(p=>{
+    p.variants.forEach(v=>{
+      if(v.qty>0)items.push(`${p.name}${v.label!=='單一款式'?` ${v.label}`:''} × ${v.qty}件`);
+    });
+  });
+  if(!items.length){showToast('尚未填入數量');return;}
+  const date=new Date().toLocaleDateString('zh-TW');
+  const text=`花開未滿團 訂貨單 ${date}\n${'─'.repeat(24)}\n${items.join('\n')}\n${'─'.repeat(24)}\n共 ${items.reduce((a,i)=>a+parseInt(i.match(/(\d+)件/)[1]),0)} 件`;
+  navigator.clipboard.writeText(text);showToast('已複製訂貨文字');
+}
+
+function exportOrderImage(){
+  const items=[];
+  products.forEach(p=>{
+    p.variants.forEach(v=>{
+      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price});
+    });
+  });
+  if(!items.length){showToast('尚未填入數量');return;}
+
+  const canvas=document.getElementById('orderCanvas');
+  const W=600,ROW=44,HEADER=110,FOOTER=60,PADDING=28;
+  const H=HEADER+items.length*ROW+FOOTER+PADDING;
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle='#FAF8F3';ctx.fillRect(0,0,W,H);
+
+  // Header
+  ctx.fillStyle='#C9826B';ctx.fillRect(0,0,W,80);
+  ctx.fillStyle='#fff';ctx.font='bold 20px serif';ctx.textAlign='center';
+  ctx.fillText('🌸 花開未滿團 訂貨單',W/2,32);
+  ctx.font='13px sans-serif';
+  ctx.fillText(new Date().toLocaleDateString('zh-TW'),W/2,56);
+  ctx.fillText(`共 ${items.length} 項，${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,74);
+
+  // Column headers
+  const y0=96;
+  ctx.fillStyle='#F2E8E0';ctx.fillRect(0,80,W,30);
+  ctx.fillStyle='#5C4A42';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+  ctx.fillText('商品名稱',PADDING,y0);
+  ctx.textAlign='center';ctx.fillText('款式/規格',W*0.62,y0);
+  ctx.textAlign='right';ctx.fillText('數量',W-PADDING,y0);
+
+  // Rows
+  items.forEach((item,i)=>{
+    const y=HEADER+i*ROW;
+    ctx.fillStyle=i%2===0?'#fff':'#FBF8F5';
+    ctx.fillRect(0,y-4,W,ROW);
+
+    ctx.fillStyle='#2C2420';ctx.font='13px sans-serif';ctx.textAlign='left';
+    // Truncate name
+    const nameMax=W*0.5;
+    let name=item.name;
+    ctx.font='13px sans-serif';
+    while(ctx.measureText(name).width>nameMax&&name.length>4)name=name.slice(0,-1);
+    if(name!==item.name)name+='…';
+    ctx.fillText(name,PADDING,y+ROW/2+4);
+
+    ctx.fillStyle='#9C8880';ctx.textAlign='center';
+    const variant=item.variant==='單一款式'?'—':item.variant;
+    ctx.fillText(variant,W*0.62,y+ROW/2+4);
+
+    ctx.fillStyle='#C9826B';ctx.font='bold 14px sans-serif';ctx.textAlign='right';
+    ctx.fillText(`× ${item.qty}`,W-PADDING,y+ROW/2+4);
+
+    // separator
+    ctx.strokeStyle='#E8DDD6';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(PADDING,y+ROW-4);ctx.lineTo(W-PADDING,y+ROW-4);ctx.stroke();
+  });
+
+  // Footer
+  const fy=HEADER+items.length*ROW+12;
+  ctx.fillStyle='#C9826B';ctx.fillRect(0,fy,W,FOOTER);
+  ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`總計 ${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,fy+28);
+  ctx.font='11px sans-serif';ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.fillText('花開未滿團 內部訂貨用',W/2,fy+48);
+
+  // Export
+  const imgUrl=canvas.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.download=`花開未滿團訂貨單_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'')}.png`;
+  a.href=imgUrl;a.click();
+  showToast('訂貨圖片已下載');
+}
+
+// ══════════════════════════════════════════════
+// COPY HELPERS
+// ══════════════════════════════════════════════
+function copyField(id){navigator.clipboard.writeText(document.getElementById(id).textContent);showToast('已複製');}
+function copyFieldTA(id){navigator.clipboard.writeText(document.getElementById(id).value);showToast('已複製');}
+function copyAll(){
+  navigator.clipboard.writeText(document.getElementById('fullPreview').value);
+  const btn=document.getElementById('copyAllBtn');
+  btn.innerHTML='✓ 已複製';btn.classList.add('copied');
+  setTimeout(()=>{btn.innerHTML='📋 複製全文';btn.classList.remove('copied');},2200);
+}
+
+// ══════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.remove('hidden');}
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function download(filename,content){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:'application/json'}));
+  a.download=filename;a.click();
+}
+function readJSON(file,cb){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{try{cb(JSON.parse(ev.target.result));}catch(e){showToast('檔案格式錯誤');}};
+  r.readAsText(file);
+}
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+loadSettings();
+renderStyleTab();
+updateAdminUI();
+</script>
+</body>
+</html>
