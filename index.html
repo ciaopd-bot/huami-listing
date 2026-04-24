@@ -901,7 +901,7 @@ ${modeInstruction}
 {"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","desc":"完整商品介紹文","reviews":["網友心得"],"image_urls":["圖片URL"]}`;
   try{
     setProgress(25,noSearch?'分析資訊中...':'搜尋商品資訊 + 網友心得...');
-    const body={model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:[...imgBlocks,{type:'text',text:prompt}]}]};
+    const body={model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content:[...imgBlocks,{type:'text',text:prompt}]}]};
     if(!noSearch)body.tools=[{type:'web_search_20250305',name:'web_search'}];
     const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     setProgress(75,'整理結果中...');
@@ -932,7 +932,7 @@ async function regenDesc(){
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock()}`;
   const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n請只輸出商品介紹文本身，不要 JSON 或標題。`;
   try{
-    const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     if(data.error){throw new Error(data.error.message||JSON.stringify(data.error));}
     const text=(data.content||[]).filter(b=>b&&b.type==='text').map(b=>b.text).join('').trim();
