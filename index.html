@@ -649,7 +649,7 @@ EX：+1
                 <button class="btn-save-style" id="saveStyleBtn" onclick="saveFromResult()">+ 存入文風庫</button>
               </div>
             </div>
-            <textarea id="unifiedPost" style="width:100%;min-height:480px;border:1px solid var(--border);border-radius:12px;padding:1.25rem;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);line-height:1.9;resize:vertical;outline:none;box-shadow:var(--shadow);background:var(--white)" oninput="onUnifiedEdit()" placeholder="上架文會顯示在這裡，可以直接編輯"></textarea>
+            <textarea id="unifiedPost" style="width:100%;min-height:480px;border:1px solid var(--border);border-radius:12px;padding:1.25rem;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);line-height:1.9;resize:vertical;outline:none;box-shadow:var(--shadow);background:var(--white)" oninput="typeof onUnifiedEdit==='function'&&onUnifiedEdit()" placeholder="上架文會顯示在這裡，可以直接編輯"></textarea>
 
             <div id="imgResultSection" style="display:none">
               <div class="main-section-label">搜尋到的商品圖片</div>
@@ -1388,7 +1388,7 @@ function buildPost(){
   if(hasError){showToast('請填寫紅色標示的必填欄位');return;}
   const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
   const titleLine=`${s.teamname}｜${name}`;
-  const introBlock=`${titleLine}\n${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
+  const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
   const size=document.getElementById('prodSize').value.trim();
   const variants=document.getElementById('prodVariants').value.trim();
   const variantLine=variants?'\n【款式】'+variants.split('\n').filter(Boolean).join('、'):'';
@@ -1406,9 +1406,16 @@ function buildPost(){
   const up=document.getElementById('unifiedPost');
   if(up){
     up.value=fullPost;
-    up.dispatchEvent(new Event('input')); // trigger any listeners
-    updateUnifiedChar();
-    console.log('unifiedPost.value set, length:', up.value.length);
+    // Inline char count update (avoid function dependency issues)
+    const _lines=fullPost.split('\n');
+    const _iStart=_lines.findIndex(l=>l.startsWith('#'));
+    const _iEnd=_lines.findIndex(l=>l.startsWith('【容量】'));
+    const _introTxt=_iStart>=0&&_iEnd>_iStart?_lines.slice(_iStart+1,_iEnd).join('\n'):'';
+    const _charEl=document.getElementById('unified-char');
+    if(_charEl){
+      _charEl.textContent=_introTxt.length>0?`介紹文 ${_introTxt.length} 字`:'';
+      _charEl.style.color=_introTxt.length>=300&&_introTxt.length<=500?'var(--leaf)':_introTxt.length>500?'var(--rose)':'var(--ink-light)';
+    }
   }
   if(currentResult.imageUrls?.length){renderImageResults(currentResult.imageUrls);document.getElementById('imgResultSection').style.display='block';}
   if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
@@ -1428,39 +1435,23 @@ function updateRfCharCount(text){
 }
 function onIntroEdit(){updateRfCharCount(document.getElementById('rf-intro').value);}
 function syncTitleToIntro(){
+  // Update first line of unified textarea to match title
   const title = document.getElementById('rf-title-ta')?.value || '';
-  const intro = document.getElementById('rf-intro');
-  if(!intro) return;
-  const lines = intro.value.split('\n');
-  // First line of intro is team|product, second is price, rest is content
-  // Update first line to match title
-  if(lines.length > 0){
+  const unified = document.getElementById('unifiedPost');
+  if(unified && unified.value){
+    const lines = unified.value.split('\n');
     lines[0] = title;
-    intro.value = lines.join('\n');
-    updateRfCharCount(intro.value);
+    unified.value = lines.join('\n');
   }
 }
 
 function getFullText(){
-  const t=document.getElementById('rf-title-ta')?.value||'';
-  const i=document.getElementById('rf-intro')?.value||'';
-  const s=document.getElementById('rf-spec')?.value||'';
-  const n=document.getElementById('rf-notes')?.value||'';
-  return [t,i,'',s,n].join('\n');
+  return document.getElementById('unifiedPost')?.value||'';
 }
 function syncPreview(){ /* no-op, preview removed */ }
 
 function onUnifiedEdit(){
   updateUnifiedChar();
-  // Sync back to hidden fields for saveFromResult
-  const text = document.getElementById('unifiedPost')?.value||'';
-  const lines = text.split('\n');
-  const specIdx = lines.findIndex(l=>l.startsWith('【容量】'));
-  const notesIdx = lines.findIndex(l=>l.startsWith('※'));
-  if(document.getElementById('rf-title-ta')) document.getElementById('rf-title-ta').value = lines[0]||'';
-  if(document.getElementById('rf-intro')) document.getElementById('rf-intro').value = specIdx>0?lines.slice(1,specIdx).join('\n'):lines.slice(1).join('\n');
-  if(document.getElementById('rf-spec')) document.getElementById('rf-spec').value = specIdx>0?(notesIdx>0?lines.slice(specIdx,notesIdx).join('\n'):lines.slice(specIdx).join('\n')):'';
-  if(document.getElementById('rf-notes')) document.getElementById('rf-notes').value = notesIdx>0?lines.slice(notesIdx).join('\n'):'';
 }
 
 function updateUnifiedChar(){
