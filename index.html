@@ -242,6 +242,10 @@ textarea::placeholder{color:var(--ink-light)}
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--ink);color:var(--white);padding:9px 16px;border-radius:8px;font-size:12px;font-weight:500;opacity:0;transform:translateY(6px);transition:all 0.22s;pointer-events:none;z-index:200}
 .toast.show{opacity:1;transform:translateY(0)}
 
+.field-error{border-color:#C9826B !important;background:#FEF5F2 !important;animation:shake 0.3s ease;}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+input.field-error::placeholder{color:#C9826B}
+
 /* ── Pricing calculator ── */
 .calc-section{background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px;padding:12px 14px;margin-bottom:10px}
 .calc-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -436,14 +440,14 @@ textarea::placeholder{color:var(--ink-light)}
               <div class="sec-label">商品資訊確認</div>
               <div class="field-row">
                 <label>商品名稱</label>
-                <input type="text" id="prodName" placeholder="例：韓國・LOTTE 杜拜巧克力Q派"/>
+                <input type="text" id="prodName" placeholder="例：韓國・LOTTE 杜拜巧克力Q派" oninput="this.classList.remove('field-error')"/>
                 <div style="font-size:11px;color:var(--ink-light);margin-top:2px">格式：國家・品牌 商品名</div>
               </div>
               <div class="row2">
                 <div class="field-row"><label>容量 / 規格</label><input type="text" id="prodVol" placeholder="例：10入、288g"/></div>
                 <div class="field-row"><label>尺寸</label><input type="text" id="prodSize" placeholder="例：110-170碼、FREE SIZE"/></div>
               </div>
-              <div class="field-row"><label>售價（NT）</label><input type="text" id="prodPrice" placeholder="例：388元/盒"/></div>
+              <div class="field-row"><label>售價（NT）</label><input type="text" id="prodPrice" placeholder="例：388元/盒" oninput="this.classList.remove('field-error')"/></div>
               <div class="field-row">
                 <label>款式（顏色／口味／種類）<span style="font-size:11px;color:var(--ink-light);font-weight:400;margin-left:4px">AI 自動偵測，每行一個</span></label>
                 <textarea id="prodVariants" rows="3" placeholder="AI 識別後自動填入&#10;也可以自己輸入，每行一個&#10;例：米色&#10;黑色&#10;深藍" style="font-size:12px"></textarea>
@@ -1115,8 +1119,13 @@ function buildPost(){
   const price=document.getElementById('prodPrice').value.trim();
   const desc=document.getElementById('prodDesc').value.trim();
   const s=getSettings();
-  if(!name){showToast('請填入商品名稱');return;}
-  if(!price){showToast('請填入售價');return;}
+  const nameEl=document.getElementById('prodName');
+  const priceEl=document.getElementById('prodPrice');
+  [nameEl,priceEl].forEach(el=>el&&el.classList.remove('field-error'));
+  let hasError=false;
+  if(!name){nameEl&&nameEl.classList.add('field-error');hasError=true;}
+  if(!price){priceEl&&priceEl.classList.add('field-error');hasError=true;}
+  if(hasError){showToast('請填寫紅色標示的必填欄位');return;}
   const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
   const titleLine=`${s.teamname}｜${name}`;
   const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
@@ -1667,6 +1676,15 @@ function updateCalc() {
 
   // Store last result
   window._lastCalc = { retail, wholesale, totalCost, country };
+
+  // Auto-apply retail price to price field
+  const priceEl = document.getElementById('prodPrice');
+  if (priceEl) {
+    priceEl.value = `${retail}元`;
+    priceEl.classList.remove('field-error');
+    priceEl.style.borderColor = 'var(--leaf)';
+    setTimeout(()=>{ priceEl.style.borderColor = ''; }, 1500);
+  }
 }
 
 function applyCalcPrice(type) {
