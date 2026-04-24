@@ -958,7 +958,19 @@ function handleFiles(files){
   Array.from(files).forEach(f=>{
     if(!f.type.startsWith('image/')||imgs.length>=10)return;
     const r=new FileReader();
-    r.onload=ev=>{imgs.push({id:Date.now()+Math.random(),b64:ev.target.result,type:f.type});renderThumbs();};
+    r.onload=ev=>{
+      // Use actual type from file, fallback to detecting from data URI
+      let imgType = f.type;
+      if (!imgType || imgType === 'image/jpeg') {
+        const header = ev.target.result.split(',')[0];
+        if (header.includes('webp')) imgType = 'image/webp';
+        else if (header.includes('png')) imgType = 'image/png';
+        else if (header.includes('gif')) imgType = 'image/gif';
+        else imgType = 'image/jpeg';
+      }
+      imgs.push({id:Date.now()+Math.random(),b64:ev.target.result,type:imgType});
+      renderThumbs();
+    };
     r.readAsDataURL(f);
   });
 }
@@ -1048,7 +1060,17 @@ async function runAI(){
   const btn=document.getElementById('aiBtn');
   btn.disabled=true;setStatus('AI 識別中...',true);setProgress(10,'準備中...');
   const s=getSettings();
-  const imgBlocks=imgs.slice(0,1).map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.b64.split(',')[1]}}));
+  const imgBlocks=imgs.slice(0,1).map(i=>{
+    // Auto-detect actual media type from base64 data URI header
+    let mediaType = i.type || 'image/jpeg';
+    if (i.b64.startsWith('data:image/webp')) mediaType = 'image/webp';
+    else if (i.b64.startsWith('data:image/png')) mediaType = 'image/png';
+    else if (i.b64.startsWith('data:image/gif')) mediaType = 'image/gif';
+    else if (i.b64.startsWith('data:image/jpeg') || i.b64.startsWith('data:image/jpg')) mediaType = 'image/jpeg';
+    // Anthropic API supports: jpeg, png, gif, webp
+    if (!['image/jpeg','image/png','image/gif','image/webp'].includes(mediaType)) mediaType = 'image/jpeg';
+    return {type:'image',source:{type:'base64',media_type:mediaType,data:i.b64.split(',')[1]}};
+  });
   const supplierSection=supplierCopy?`\n廠商文案（${currentMode==='direct'?'直接沿用':'參考用，不要照抄'}）：\n"""\n${supplierCopy}\n"""\n`:'';
   const urlSection=refUrls.length?`\n參考網址：\n${refUrls.map((u,i)=>`${i+1}. ${u}`).join('\n')}\n`:'';
   const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請用web_search搜尋：1)商品的詳細介紹與特色 2)台灣或國際網友的使用心得評價 3)商品的成分或規格資訊 4)相關圖片URL（3~6個）。搜尋時用中文和原文名稱都試試。`;
@@ -1526,27 +1548,13 @@ function toggleCalc() {
   document.getElementById('calcToggleIcon').textContent = calcVisible ? '▼' : '▶';
 }
 
-async function fetchRates() {
+function fetchRates() {
+  // 使用你設定的固定匯率，不呼叫外部 API（避免 CORS 問題）
   const badge = document.getElementById('rateDisplay');
-  if (!badge) return;
-  badge.textContent = '更新中...';
-  try {
-    const res = await fetch('https://api.frankfurter.app/latest?from=TWD&to=JPY,KRW,THB,CNY');
-    const data = await res.json();
-    // data.rates = foreign per TWD → invert to get TWD per foreign
-    Object.entries(data.rates).forEach(([cur, rate]) => {
-      exchangeRates[cur] = 1 / rate;
-    });
-    // Update COUNTRY_CONFIG with live rates
-    if (exchangeRates.JPY) COUNTRY_CONFIG.JP.rate = exchangeRates.JPY;
-    // KRW: 固定使用韓元/42 公式，不用即時匯率
-    if (exchangeRates.THB) COUNTRY_CONFIG.TH.rate = exchangeRates.THB;
-    if (exchangeRates.CNY) COUNTRY_CONFIG.CN.rate = exchangeRates.CNY;
-    onCountryChange();
-    badge.textContent = '匯率已更新 ↻';
-    setTimeout(()=>{ if(badge) badge.textContent='點擊更新匯率 ↻'; }, 2000);
-  } catch(e) {
-    badge.textContent = '使用預設匯率 ↻';
+  onCountryChange();
+  if (badge) {
+    badge.textContent = '固定匯率 ↻';
+    badge.title = '匯率已依設定值固定，可手動修改';
   }
 }
 
