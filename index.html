@@ -1571,11 +1571,8 @@ function renderProducts(){
     <div class="product-card">
       <div class="product-card-header">
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-          <input type="checkbox" class="product-select-cb variant-check" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--red)"
-            onchange="toggleProductSelect(${pi},this.checked)" title="選取此商品（用於刪除）"/>
-          <input type="checkbox" class="variant-check" style="width:20px;height:20px;flex-shrink:0"
-            ${p.variants.every(v=>v.checked!==false)?'checked':p.variants.some(v=>v.checked!==false)?'indeterminate':''} 
-            onchange="toggleProduct(${pi},this.checked)" title="全選/取消此商品所有款式"/>
+          <input type="checkbox" class="product-select-cb" style="width:20px;height:20px;flex-shrink:0;accent-color:var(--red);cursor:pointer"
+            onchange="toggleProductSelect(${pi},this.checked)" title="勾選此商品（全選/刪除用）"/>
           ${p.thumb?`<img src="${p.thumb}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0">`:'<div style="width:48px;height:48px;border-radius:6px;border:1px solid var(--border);background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>'}
           <div style="flex:1;min-width:0">
             <div class="product-card-name">${p.name}</div>
@@ -1609,15 +1606,12 @@ function renderProducts(){
         }).join('')}
       </div>
     </div>`).join('');
-  // Set indeterminate for partial selection
+  // Restore selection state
   setTimeout(()=>{
     const cards = list.querySelectorAll('.product-card');
     products.forEach((p,pi)=>{
-      const cb = cards[pi]?.querySelector('input[type=checkbox]');
-      if(!cb) return;
-      const allOn = p.variants.every(v=>v.checked!==false);
-      const someOn = p.variants.some(v=>v.checked!==false);
-      cb.indeterminate = !allOn && someOn;
+      const selCb = cards[pi]?.querySelector('.product-select-cb');
+      if(selCb) selCb.checked = selectedProductIndices?.has(pi)||false;
     });
   }, 0);
 }
@@ -1699,14 +1693,16 @@ function confirmBatch(){
 let selectedProductIndices = new Set();
 
 function toggleSelectAllProducts(){
-  const allSelected = selectedProductIndices.size === products.length;
+  const allSelected = selectedProductIndices.size === products.length && products.length > 0;
   selectedProductIndices = allSelected ? new Set() : new Set(products.map((_,i)=>i));
-  document.getElementById('selectAllBtn').textContent = allSelected ? '☑ 全選' : '☐ 取消全選';
-  // Update visual
+  const btnText = allSelected ? '☑ 全選' : '☐ 取消全選';
+  const btn = document.getElementById('selectAllBtn');
+  if(btn) btn.textContent = btnText;
+  // Update all product card checkboxes
   document.querySelectorAll('.product-select-cb').forEach((cb,i)=>{
     cb.checked = selectedProductIndices.has(i);
     const card = cb.closest('.product-card');
-    if(card) card.style.outline = selectedProductIndices.has(i) ? '2px solid var(--rose)' : '';
+    if(card) card.style.outline = selectedProductIndices.has(i) ? '2px solid var(--red)' : '';
   });
 }
 
@@ -1943,8 +1939,14 @@ function copyAll(){
 // ══════════════════════════════════════════════
 // MODAL
 // ══════════════════════════════════════════════
-function openModal(id){document.getElementById(id).classList.remove('hidden');}
-function closeModal(id){document.getElementById(id).classList.add('hidden');}
+function openModal(id){
+  const el=document.getElementById(id);
+  if(el){el.classList.remove('hidden');el.style.display='';}
+}
+function closeModal(id){
+  const el=document.getElementById(id);
+  if(el){el.classList.add('hidden');el.style.display='none';}
+}
 
 // ══════════════════════════════════════════════
 // UTILS
