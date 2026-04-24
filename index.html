@@ -350,6 +350,12 @@ textarea::placeholder{color:var(--ink-light)}
             </div>
 
             <div class="section">
+              <div class="sec-label">商品關鍵字 <span class="badge badge-blue">選填</span></div>
+              <textarea id="prodKeyword" rows="2" placeholder="每行一個寫法，例如：&#10;LOTTE 杜拜巧克力&#10;롯데 두바이 초콜릿" style="font-size:12px"></textarea>
+              <div style="font-size:11px;color:var(--ink-light);margin-top:3px">可填中文、韓文、日文、英文，AI 都會用繁體中文輸出</div>
+            </div>
+
+            <div class="section">
               <button class="btn btn-dark" id="aiBtn" onclick="runAI()">✦ AI 識別 + 產生資訊</button>
               <div class="prog-wrap" id="progWrap">
                 <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
@@ -949,7 +955,11 @@ async function runAI(){
   const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請搜尋這個商品的台灣網友評價（PTT、Dcard、FB社團）和商品圖片 URL（3〜6 個）。`;
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
-  const prompt=`你是「${s.teamname}」的上架文案小幫手。${supplierSection}${urlSection}
+  const keywordRaw=document.getElementById('prodKeyword').value.trim();
+  const keywordLines=keywordRaw?keywordRaw.split('\n').map(k=>k.trim()).filter(Boolean):[];
+  const keyword=keywordLines.join('、');
+  const keywordHint=keyword?`\n這個商品有以下名稱（不同語言的同一商品）：${keywordLines.map((k,i)=>`\n${i+1}. ${k}`).join('')}\n請以這些名稱搜尋並辨識商品，輸出一律用繁體中文。`:'';
+  const prompt=`你是「${s.teamname}」的上架文案小幫手。${keywordHint}${supplierSection}${urlSection}
 任務：1. 分析照片（若有）  2. ${searchInstruction}
 ${modeInstruction}
 請以繁體中文回覆，格式為純 JSON，不要 markdown：
@@ -1062,7 +1072,7 @@ function renderReviews(reviews){
 }
 function clearListing(){
   imgs=[];currentResult={};refUrls=[];renderThumbs();renderUrlTags();
-  ['prodName','prodVol','prodPrice','prodDesc','supplierCopy'].forEach(id=>document.getElementById(id).value='');
+  ['prodName','prodVol','prodPrice','prodDesc','supplierCopy','prodKeyword'].forEach(id=>document.getElementById(id).value='');
   updateCharCount();
   document.getElementById('emptyState').style.display='flex';
   document.getElementById('resultPanel').style.display='none';
@@ -1222,85 +1232,123 @@ function exportOrderImage(){
   const items=[];
   products.forEach(p=>{
     p.variants.forEach(v=>{
-      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price});
+      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,thumb:p.thumb||null});
     });
   });
   if(!items.length){showToast('尚未填入數量');return;}
 
+  // Grid layout: each item = big photo + qty badge
+  const COLS=3, CELL=180, GAP=12, PAD=20;
+  const ROWS=Math.ceil(items.length/COLS);
+  const W=COLS*CELL+(COLS-1)*GAP+PAD*2;
+  const HEADER_H=70, FOOTER_H=50;
+  const H=HEADER_H+ROWS*(CELL+GAP)-GAP+FOOTER_H+PAD*2;
+
   const canvas=document.getElementById('orderCanvas');
-  const W=600,ROW=44,HEADER=110,FOOTER=60,PADDING=28;
-  const H=HEADER+items.length*ROW+FOOTER+PADDING;
-  canvas.width=W;canvas.height=H;
+  canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
 
   // Background
-  ctx.fillStyle='#FAF8F3';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#FAF8F3'; ctx.fillRect(0,0,W,H);
 
   // Header
-  ctx.fillStyle='#C9826B';ctx.fillRect(0,0,W,80);
-  ctx.fillStyle='#fff';ctx.font='bold 20px serif';ctx.textAlign='center';
-  ctx.fillText('🌸 花開未滿團 訂貨單',W/2,32);
-  ctx.font='13px sans-serif';
-  ctx.fillText(new Date().toLocaleDateString('zh-TW'),W/2,56);
-  ctx.fillText(`共 ${items.length} 項，${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,74);
+  ctx.fillStyle='#C9826B'; ctx.fillRect(0,0,W,HEADER_H);
+  ctx.fillStyle='#fff'; ctx.font='bold 18px serif'; ctx.textAlign='center';
+  ctx.fillText('花開未滿團 訂貨單',W/2,28);
+  ctx.font='12px sans-serif';
+  ctx.fillText(new Date().toLocaleDateString('zh-TW'),W/2,48);
+  ctx.fillText(`共 ${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,65);
 
-  // Column headers
-  const y0=96;
-  ctx.fillStyle='#F2E8E0';ctx.fillRect(0,80,W,30);
-  ctx.fillStyle='#5C4A42';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
-  ctx.fillText('商品名稱',PADDING,y0);
-  ctx.textAlign='center';ctx.fillText('款式/規格',W*0.62,y0);
-  ctx.textAlign='right';ctx.fillText('數量',W-PADDING,y0);
+  // Draw items as grid
+  const drawItems = () => {
+    items.forEach((item,i)=>{
+      const col=i%COLS, row=Math.floor(i/COLS);
+      const x=PAD+col*(CELL+GAP);
+      const y=HEADER_H+PAD+row*(CELL+GAP);
 
-  // Rows
-  items.forEach((item,i)=>{
-    const y=HEADER+i*ROW;
-    ctx.fillStyle=i%2===0?'#fff':'#FBF8F5';
-    ctx.fillRect(0,y-4,W,ROW);
+      // Card bg
+      ctx.fillStyle='#fff';
+      ctx.beginPath();
+      if(ctx.roundRect){ctx.roundRect(x,y,CELL,CELL,8);}
+      else{ctx.rect(x,y,CELL,CELL);}
+      ctx.fill();
+      ctx.strokeStyle='#E8DDD6'; ctx.lineWidth=1; ctx.stroke();
 
-    // Thumbnail
-    const THUMB=ROW-10;
-    if(item.thumb){
-      const timg=new Image();timg.src=item.thumb;
-      try{ctx.drawImage(timg,PADDING,y,THUMB,THUMB);}catch(e){}
-    } else {
-      ctx.fillStyle='#F2E8E0';ctx.fillRect(PADDING,y,THUMB,THUMB);
-    }
-    const nameX=PADDING+THUMB+8;
+      // Photo
+      const IMG_H=CELL-44;
+      if(item.thumb){
+        try{
+          const timg=new Image(); timg.src=item.thumb;
+          ctx.save();
+          ctx.beginPath();
+          if(ctx.roundRect){ctx.roundRect(x+4,y+4,CELL-8,IMG_H-4,6);}
+          else{ctx.rect(x+4,y+4,CELL-8,IMG_H-4);}
+          ctx.clip();
+          ctx.drawImage(timg,x+4,y+4,CELL-8,IMG_H-4);
+          ctx.restore();
+        }catch(e){
+          ctx.fillStyle='#F2E8E0'; ctx.fillRect(x+4,y+4,CELL-8,IMG_H-4);
+        }
+      } else {
+        ctx.fillStyle='#F2E8E0'; ctx.fillRect(x+4,y+4,CELL-8,IMG_H-4);
+        ctx.fillStyle='#C9826B'; ctx.font='28px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('📦',x+CELL/2,y+IMG_H/2+10);
+      }
 
-    ctx.fillStyle='#2C2420';ctx.font='13px sans-serif';ctx.textAlign='left';
-    // Truncate name
-    const nameMax=W*0.48;
-    let name=item.name;
-    while(ctx.measureText(name).width>nameMax&&name.length>4)name=name.slice(0,-1);
-    if(name!==item.name)name+='…';
-    ctx.fillText(name,nameX,y+ROW/2+4);
+      // Variant label (if not single)
+      const variantLabel=item.variant&&item.variant!=='單一款式'?item.variant:'';
+      const QTY_Y=y+IMG_H+4;
 
-    ctx.fillStyle='#9C8880';ctx.textAlign='center';
-    const variant=item.variant==='單一款式'?'—':item.variant;
-    ctx.fillText(variant,W*0.62,y+ROW/2+4);
+      // Bottom bar
+      ctx.fillStyle='#FAF8F3'; ctx.fillRect(x,QTY_Y,CELL,44);
 
-    ctx.fillStyle='#C9826B';ctx.font='bold 14px sans-serif';ctx.textAlign='right';
-    ctx.fillText(`× ${item.qty}`,W-PADDING,y+ROW/2+4);
+      // Variant text
+      if(variantLabel){
+        ctx.fillStyle='#9C8880'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+        let vt=variantLabel;
+        while(ctx.measureText(vt).width>CELL-16&&vt.length>2)vt=vt.slice(0,-1);
+        if(vt!==variantLabel)vt+='…';
+        ctx.fillText(vt,x+CELL/2,QTY_Y+14);
+      }
 
-    // separator
-    ctx.strokeStyle='#E8DDD6';ctx.lineWidth=0.5;
-    ctx.beginPath();ctx.moveTo(PADDING,y+ROW-4);ctx.lineTo(W-PADDING,y+ROW-4);ctx.stroke();
+      // Qty badge
+      ctx.fillStyle='#C9826B';
+      ctx.beginPath();
+      if(ctx.roundRect){ctx.roundRect(x+CELL/2-24,QTY_Y+18,48,22,6);}
+      else{ctx.rect(x+CELL/2-24,QTY_Y+18,48,22);}
+      ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(`× ${item.qty}`,x+CELL/2,QTY_Y+34);
+    });
+  };
+
+  // Load all images first then draw
+  let loaded=0;
+  const thumbItems=items.filter(i=>i.thumb);
+  if(thumbItems.length===0){
+    drawItems();
+    finishExport(canvas);
+    return;
+  }
+  thumbItems.forEach(item=>{
+    const img=new Image();
+    img.onload=()=>{ loaded++; if(loaded===thumbItems.length){drawItems();finishExport(canvas);} };
+    img.onerror=()=>{ loaded++; item.thumb=null; if(loaded===thumbItems.length){drawItems();finishExport(canvas);} };
+    img.src=item.thumb;
   });
+}
 
+function finishExport(canvas){
   // Footer
-  const fy=HEADER+items.length*ROW+12;
-  ctx.fillStyle='#C9826B';ctx.fillRect(0,fy,W,FOOTER);
-  ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-  ctx.fillText(`總計 ${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,fy+28);
-  ctx.font='11px sans-serif';ctx.fillStyle='rgba(255,255,255,0.8)';
-  ctx.fillText('花開未滿團 內部訂貨用',W/2,fy+48);
-
-  // Export
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.fillStyle='#C9826B'; ctx.fillRect(0,H-50,W,50);
+  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('花開未滿團 內部訂貨用',W/2,H-20);
   const imgUrl=canvas.toDataURL('image/png');
   const a=document.createElement('a');
   a.download=`花開未滿團訂貨單_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'')}.png`;
-  a.href=imgUrl;a.click();
+  a.href=imgUrl; a.click();
   showToast('訂貨圖片已下載');
 }
 
