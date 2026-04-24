@@ -755,6 +755,7 @@ EX：+1
   <div class="modal" style="max-width:440px">
     <div class="modal-title">📦 加入訂貨清單</div>
     <div class="modal-sub">確認後加入，數量到訂貨管理再填</div>
+    <div class="notice" style="font-size:11px;margin-bottom:8px">📷 已上傳的照片會依序對應款式順序，廠商訂貨圖片每格會顯示對應照片</div>
     <!-- Photo preview -->
     <div id="sto-photo-wrap" style="display:none;margin-bottom:12px">
       <img id="sto-photo" style="width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:var(--cream)"/>
@@ -1391,10 +1392,13 @@ function confirmSendToOrder(){
   if(!name){showToast('請填入商品名稱');return;}
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
   const thumb=(imgs.length>0?imgs[0].b64:null) || window._historyThumb || null;
-  window._historyThumb = null; // clear after use
+  // Map each variant to its corresponding photo (by index)
+  const allThumbs = imgs.length > 0 ? imgs.map(i=>i.b64) : (window._historyThumb ? [window._historyThumb] : []);
+  window._historyThumb = null;
   const product={
     id:Date.now(),name,vendor,price,thumb,
-    variants:variants.map(v=>({label:v,qty:0,checked:true,totalOrdered:0}))
+    photos: allThumbs, // all photos indexed by variant
+    variants:variants.map((v,vi)=>({label:v,qty:0,checked:true,totalOrdered:0,photoIdx:vi}))
   };
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
@@ -1413,8 +1417,8 @@ function confirmAddProduct(){
   if(!name){showToast('請填入商品名稱');return;}
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
   const product={
-    id:Date.now(),name,vendor,price,
-    variants:variants.map(v=>({label:v,qty:0,checked:true,totalOrdered:0}))
+    id:Date.now(),name,vendor,price,thumb:null,photos:[],
+    variants:variants.map((v,vi)=>({label:v,qty:0,checked:true,totalOrdered:0,photoIdx:vi}))
   };
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
@@ -1452,6 +1456,7 @@ function renderProducts(){
           return `
           <div class="variant-row ${checked?'selected':''}" id="vrow-${pi}-${vi}">
             <input type="checkbox" class="variant-check" ${checked?'checked':''} onchange="toggleVariant(${pi},${vi},this.checked)"/>
+            ${p.photos&&p.photos[v.photoIdx]?`<img src="${p.photos[v.photoIdx]}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0">`:''}
             <div class="variant-label">${v.label}</div>
             <div class="variant-total ${total>0?'has-total':''}" title="累計已訂">已訂${total}</div>
             <div class="variant-qty">
@@ -1530,7 +1535,11 @@ function renderOrderSummary(){
   const items=[];
   products.forEach(p=>{
     p.variants.forEach(v=>{
-      if(v.checked!==false && v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price,vendor:p.vendor,thumb:p.thumb||null,totalOrdered:v.totalOrdered||0});
+      if(v.checked!==false && v.qty>0){
+        // Get variant-specific photo: use photoIdx to index into product.photos array
+        const variantPhoto = (p.photos && p.photos[v.photoIdx]) || p.thumb || null;
+        items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price,vendor:p.vendor,thumb:variantPhoto,totalOrdered:v.totalOrdered||0});
+      }
     });
   });
   if(!items.length){container.innerHTML='<div class="order-empty">尚未填入數量</div>';return;}
@@ -1619,15 +1628,16 @@ function exportOrderImage(){
         ctx.fillText('📦',x+CELL/2,y+IMG_H/2+10);
       }
 
-      // Variant label (if not single)
+      // Variant label - only show text if NO variant-specific photo
       const variantLabel=item.variant&&item.variant!=='單一款式'?item.variant:'';
+      const hasVariantPhoto = !!item.thumb;
       const QTY_Y=y+IMG_H+4;
 
       // Bottom bar
       ctx.fillStyle='#FAF8F3'; ctx.fillRect(x,QTY_Y,CELL,44);
 
-      // Variant text
-      if(variantLabel){
+      // Only show text label if no photo available for this variant
+      if(variantLabel && !hasVariantPhoto){
         ctx.fillStyle='#9C8880'; ctx.font='11px sans-serif'; ctx.textAlign='center';
         let vt=variantLabel;
         while(ctx.measureText(vt).width>CELL-16&&vt.length>2)vt=vt.slice(0,-1);
