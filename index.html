@@ -683,6 +683,8 @@ EX：+1
           <div class="main-title">訂貨管理</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-dark btn-sm" onclick="showAddProductModal()">+ 新增商品</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleSelectAllProducts()" id="selectAllBtn">☑ 全選</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="deleteSelectedProducts()">🗑 刪除勾選</button>
             <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空本次</button>
             <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="resetAllTotals()">清空累計</button>
           </div>
@@ -761,7 +763,15 @@ EX：+1
   <div class="modal" style="max-width:420px">
     <div class="modal-title">新增商品</div>
     <div class="modal-sub">填入商品基本資訊與款式規格</div>
-    <div class="field-row"><label>商品名稱</label><input type="text" id="ap-name" placeholder="例：韓國・LOTTE 杜拜巧克力Q派"/></div>
+    <!-- Photo upload -->
+    <div class="field-row" style="display:flex;gap:8px;align-items:flex-start">
+      <div id="ap-photo-preview" onclick="document.getElementById('apPhotoInput').click()" style="width:72px;height:72px;border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden;background:var(--cream)">📷</div>
+      <div style="flex:1">
+        <label>商品名稱</label>
+        <input type="text" id="ap-name" placeholder="例：韓國・LOTTE 杜拜巧克力Q派"/>
+      </div>
+      <input type="file" id="apPhotoInput" accept="image/*" style="display:none" onchange="previewApPhoto(event)"/>
+    </div>
     <div class="row2">
       <div class="field-row"><label>廠商</label><input type="text" id="ap-vendor" placeholder="例：LOTTE"/></div>
       <div class="field-row"><label>單價</label><input type="text" id="ap-price" placeholder="例：388元"/></div>
@@ -813,7 +823,7 @@ EX：+1
       <button onclick="closeCropTool()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-light);padding:4px">✕</button>
     </div>
     <div class="crop-body">
-      <!-- Canvas area -->
+      <!-- Image + overlay area -->
       <div class="crop-canvas-wrap" id="cropCanvasWrap">
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;padding:2rem" id="cropUploadArea">
           <div style="font-size:40px;opacity:0.4">🖼️</div>
@@ -823,8 +833,11 @@ EX：+1
           <div style="font-size:11px;color:var(--ink-light)">上傳後在圖上拖曳框選每個顏色區域</div>
           <input type="file" id="cropFileInput" accept="image/*" style="display:none" onchange="loadCropImage(event)"/>
         </div>
-        <canvas id="cropCanvas" style="display:none;max-width:100%;max-height:100%"></canvas>
-        <div class="selection-rect hidden" id="selectionRect"></div>
+        <!-- Lightweight: img + transparent overlay for selection -->
+        <div id="cropImgContainer" style="display:none;position:relative;width:100%;height:100%">
+          <img id="cropDisplayImg" style="max-width:100%;max-height:100%;display:block;object-fit:contain;user-select:none;-webkit-user-drag:none"/>
+          <div id="cropSelOverlay" style="position:absolute;inset:0;cursor:crosshair"></div>
+        </div>
       </div>
       <!-- Sidebar: cropped zones -->
       <div class="crop-sidebar" id="cropSidebar">
@@ -1505,7 +1518,26 @@ function confirmSendToOrder(){
   // Stay on current page, no auto-switch
 }
 
-function showAddProductModal(){openModal('addProductModal');['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');}
+function showAddProductModal(){
+  openModal('addProductModal');
+  ['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');
+  window._apPhoto = null;
+  const prev = document.getElementById('ap-photo-preview');
+  if(prev){ prev.innerHTML = '📷'; prev.style.border = '1.5px dashed var(--border)'; }
+}
+
+function previewApPhoto(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    window._apPhoto = ev.target.result;
+    const prev = document.getElementById('ap-photo-preview');
+    if(prev){ prev.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover">`; prev.style.border = 'none'; }
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
 
 function confirmAddProduct(){
   const name=document.getElementById('ap-name').value.trim();
@@ -1515,9 +1547,12 @@ function confirmAddProduct(){
   if(!name){showToast('請填入商品名稱');return;}
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
   const product={
-    id:Date.now(),name,vendor,price,thumb:null,photos:[],
+    id:Date.now(),name,vendor,price,
+    thumb: window._apPhoto || null,
+    photos: window._apPhoto ? [window._apPhoto] : [],
     variants:variants.map((v,vi)=>({label:v,qty:0,checked:true,totalOrdered:0,photoIdx:vi}))
   };
+  window._apPhoto = null;
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
@@ -1533,6 +1568,8 @@ function renderProducts(){
     <div class="product-card">
       <div class="product-card-header">
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+          <input type="checkbox" class="product-select-cb variant-check" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--red)"
+            onchange="toggleProductSelect(${pi},this.checked)" title="選取此商品（用於刪除）"/>
           <input type="checkbox" class="variant-check" style="width:20px;height:20px;flex-shrink:0"
             ${p.variants.every(v=>v.checked!==false)?'checked':p.variants.some(v=>v.checked!==false)?'indeterminate':''} 
             onchange="toggleProduct(${pi},this.checked)" title="全選/取消此商品所有款式"/>
@@ -1580,6 +1617,16 @@ function renderProducts(){
       cb.indeterminate = !allOn && someOn;
     });
   }, 0);
+}
+
+function toggleProductSelect(pi, checked){
+  if(checked) selectedProductIndices.add(pi);
+  else selectedProductIndices.delete(pi);
+  const card = document.querySelectorAll('.product-card')[pi];
+  if(card) card.style.outline = checked ? '2px solid var(--red)' : '';
+  // Update select all btn text
+  const allSel = selectedProductIndices.size === products.length && products.length > 0;
+  document.getElementById('selectAllBtn').textContent = allSel ? '☐ 取消全選' : '☑ 全選';
 }
 
 function toggleProduct(pi, checked){
@@ -1644,6 +1691,31 @@ function confirmBatch(){
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   renderProducts();renderOrderSummary();
   showToast(`已確認 ${total} 件，已加入累計數量`);
+}
+
+let selectedProductIndices = new Set();
+
+function toggleSelectAllProducts(){
+  const allSelected = selectedProductIndices.size === products.length;
+  selectedProductIndices = allSelected ? new Set() : new Set(products.map((_,i)=>i));
+  document.getElementById('selectAllBtn').textContent = allSelected ? '☑ 全選' : '☐ 取消全選';
+  // Update visual
+  document.querySelectorAll('.product-select-cb').forEach((cb,i)=>{
+    cb.checked = selectedProductIndices.has(i);
+    const card = cb.closest('.product-card');
+    if(card) card.style.outline = selectedProductIndices.has(i) ? '2px solid var(--rose)' : '';
+  });
+}
+
+function deleteSelectedProducts(){
+  if(!selectedProductIndices.size){ showToast('請先勾選要刪除的商品'); return; }
+  if(!confirm(`確定要刪除選取的 ${selectedProductIndices.size} 個商品嗎？`)) return;
+  products = products.filter((_,i) => !selectedProductIndices.has(i));
+  selectedProductIndices = new Set();
+  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  document.getElementById('selectAllBtn').textContent = '☑ 全選';
+  renderProducts(); renderOrderSummary();
+  showToast('已刪除選取的商品');
 }
 
 function clearAllOrders(){
@@ -1895,31 +1967,24 @@ function showToast(msg){
 
 
 // ══════════════════════════════════════════════
-// CROP TOOL
+// CROP TOOL (lightweight version)
 // ══════════════════════════════════════════════
 let cropImg = null;
-let cropScale = 1;
-let cropZones = []; // [{x,y,w,h,label,dataUrl}]
+let cropImgSrc = null;
+let cropZones = [];
 let cropDragging = false;
 let cropStart = {x:0,y:0};
 let cropCurrent = {x:0,y:0};
+let cropImgRect = null;
 
 function openCropTool(){
   document.getElementById('cropOverlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
-}
-
-function zoomCrop(delta){
-  if(!cropImg) return;
-  cropScale = Math.max(0.3, Math.min(3, cropScale + delta));
-  const canvas = document.getElementById('cropCanvas');
-  // Draw at 1:1 with the image (cropScale applied via logical pixels)
-  canvas.width = Math.round(cropImg.width * cropScale);
-  canvas.height = Math.round(cropImg.height * cropScale);
-  // Don't set style.width/height - let canvas display at its natural pixel size
-  canvas.style.width = '';
-  canvas.style.height = '';
-  renderCropCanvas();
+  // Reset
+  if(!cropImgSrc){
+    document.getElementById('cropUploadArea').style.display = 'flex';
+    document.getElementById('cropImgContainer').style.display = 'none';
+  }
 }
 
 function closeCropTool(){
@@ -1932,146 +1997,174 @@ function loadCropImage(e){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const img = new Image();
-    img.onload = () => {
-      cropImg = img;
-      cropZones = [];
-      renderCropCanvas();
-      renderCropSidebar();
-      document.getElementById('cropUploadArea').style.display = 'none';
-      document.getElementById('cropCanvas').style.display = 'block';
-      document.getElementById('cropApplyBtn').style.display = 'none';
-      document.getElementById('cropHint').textContent = '在圖上拖曳框選每個顏色區域';
-      setupCropEvents();
-    };
-    img.src = ev.target.result;
+    cropImgSrc = ev.target.result;
+    cropZones = [];
+    document.getElementById('cropUploadArea').style.display = 'none';
+    document.getElementById('cropImgContainer').style.display = 'block';
+    document.getElementById('cropDisplayImg').src = cropImgSrc;
+    document.getElementById('cropSelOverlay').innerHTML = '';
+    document.getElementById('cropApplyBtn').style.display = 'none';
+    renderCropSidebar();
+    setupCropDrag();
+    // Load native image for cropping
+    cropImg = new Image();
+    cropImg.src = cropImgSrc;
   };
   reader.readAsDataURL(file);
   e.target.value = '';
 }
 
-function renderCropCanvas(){
-  const canvas = document.getElementById('cropCanvas');
-  const wrap = document.getElementById('cropCanvasWrap');
-  if(!cropImg) return;
-  // Fit image to available space initially (user can zoom in/out)
-  const maxW = wrap.clientWidth - 8;
-  const maxH = wrap.clientHeight - 8;
-  cropScale = Math.min(maxW / cropImg.width, maxH / cropImg.height, 1);
-  // Minimum scale so image is always visible
-  cropScale = Math.max(cropScale, 0.2);
-  // Draw at 1:1 with the image (cropScale applied via logical pixels)
-  canvas.width = Math.round(cropImg.width * cropScale);
-  canvas.height = Math.round(cropImg.height * cropScale);
-  // Don't set style.width/height - let canvas display at its natural pixel size
-  canvas.style.width = '';
-  canvas.style.height = '';
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(cropImg, 0, 0, canvas.width, canvas.height);
-  // Draw existing zones
+function setupCropDrag(){
+  const overlay = document.getElementById('cropSelOverlay');
+  overlay.onmousedown = overlay.ontouchstart = startDrag;
+  overlay.onmousemove = overlay.ontouchmove = moveDrag;
+  overlay.onmouseup = overlay.ontouchend = endDrag;
+  // Remove and re-add active selection box
+  let selBox = document.getElementById('activeCropBox');
+  if(!selBox){
+    selBox = document.createElement('div');
+    selBox.id = 'activeCropBox';
+    selBox.style.cssText = 'position:absolute;border:2px solid #C9826B;background:rgba(201,130,107,0.15);display:none;pointer-events:none';
+    overlay.appendChild(selBox);
+  }
+}
+
+function getImgRect(){
+  return document.getElementById('cropDisplayImg').getBoundingClientRect();
+}
+
+function getPosFromEvent(e){
+  const img = document.getElementById('cropDisplayImg');
+  const r = img.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  // Position as fraction of displayed image
+  const fx = Math.max(0, Math.min((clientX - r.left) / r.width, 1));
+  const fy = Math.max(0, Math.min((clientY - r.top) / r.height, 1));
+  return {fx, fy, px: clientX - r.left, py: clientY - r.top};
+}
+
+function startDrag(e){
+  e.preventDefault();
+  cropDragging = true;
+  const pos = getPosFromEvent(e);
+  cropStart = pos;
+  cropCurrent = pos;
+  const box = document.getElementById('activeCropBox');
+  if(box) box.style.display = 'block';
+}
+
+function moveDrag(e){
+  if(!cropDragging) return;
+  e.preventDefault();
+  cropCurrent = getPosFromEvent(e);
+  const img = document.getElementById('cropDisplayImg');
+  const r = img.getBoundingClientRect();
+  const x = Math.min(cropStart.px, cropCurrent.px);
+  const y = Math.min(cropStart.py, cropCurrent.py);
+  const w = Math.abs(cropCurrent.px - cropStart.px);
+  const h = Math.abs(cropCurrent.py - cropStart.py);
+  const box = document.getElementById('activeCropBox');
+  if(box){
+    box.style.left = x+'px'; box.style.top = y+'px';
+    box.style.width = w+'px'; box.style.height = h+'px';
+  }
+}
+
+function endDrag(e){
+  if(!cropDragging) return;
+  cropDragging = false;
+  const box = document.getElementById('activeCropBox');
+  if(box) box.style.display = 'none';
+
+  const fx1 = Math.min(cropStart.fx, cropCurrent.fx);
+  const fy1 = Math.min(cropStart.fy, cropCurrent.fy);
+  const fw = Math.abs(cropCurrent.fx - cropStart.fx);
+  const fh = Math.abs(cropCurrent.fy - cropStart.fy);
+  if(fw < 0.02 || fh < 0.02) return; // too small
+
+  if(!cropImg || !cropImg.naturalWidth) return;
+  const iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+  const x = Math.round(fx1 * iw), y = Math.round(fy1 * ih);
+  const w = Math.round(fw * iw), h = Math.round(fh * ih);
+
+  // Crop via offscreen canvas
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  off.getContext('2d').drawImage(cropImg, x, y, w, h, 0, 0, w, h);
+  const dataUrl = off.toDataURL('image/jpeg', 0.92);
+
+  // Add visual zone marker on overlay
+  const overlay = document.getElementById('cropSelOverlay');
+  const marker = document.createElement('div');
+  const idx = cropZones.length;
+  marker.style.cssText = `position:absolute;border:2px solid #C9826B;background:rgba(201,130,107,0.12);left:${fx1*100}%;top:${fy1*100}%;width:${fw*100}%;height:${fh*100}%;pointer-events:none`;
+  marker.innerHTML = `<div style="background:#C9826B;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-block">款式${idx+1}</div>`;
+  overlay.appendChild(marker);
+
+  cropZones.push({fx1,fy1,fw,fh,label:`款式${idx+1}`,dataUrl});
+  renderCropSidebar();
+  if(cropZones.length>0) document.getElementById('cropApplyBtn').style.display='';
+}
+
+function renderCropSidebar(){
+  const sidebar = document.getElementById('cropSidebar');
+  if(!cropZones.length){
+    sidebar.innerHTML = '<div class="crop-hint" id="cropHint">在圖上拖曳框選每個顏色/款式區域，框選後出現在這裡</div>';
+    return;
+  }
+  sidebar.innerHTML = '';
   cropZones.forEach((z,i)=>{
-    ctx.strokeStyle = '#C9826B';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(z.x * cropScale, z.y * cropScale, z.w * cropScale, z.h * cropScale);
-    ctx.fillStyle = 'rgba(201,130,107,0.18)';
-    ctx.fillRect(z.x * cropScale, z.y * cropScale, z.w * cropScale, z.h * cropScale);
-    // Label badge
-    const lx = z.x * cropScale + 4;
-    const ly = z.y * cropScale + 4;
-    const label = z.label || `款式${i+1}`;
-    ctx.font = 'bold 14px sans-serif';
-    const tw = ctx.measureText(label).width;
-    ctx.fillStyle = '#C9826B';
-    ctx.fillRect(lx-2, ly-1, tw+10, 20);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(label, lx+3, ly+14);
+    const div = document.createElement('div');
+    div.className = 'crop-zone';
+    div.innerHTML = `<img class="crop-zone-img" src="${z.dataUrl}"/>
+      <div class="crop-zone-label">
+        <input type="text" value="${z.label}" placeholder="顏色名稱" onchange="cropZones[${i}].label=this.value"/>
+        <button class="crop-zone-rm" onclick="removeCropZone(${i})">✕</button>
+      </div>`;
+    sidebar.appendChild(div);
   });
 }
 
-function setupCropEvents(){
-  const canvas = document.getElementById('cropCanvas');
-  const rect_el = document.getElementById('selectionRect');
-
-  function getPos(e){
-    const r = newCanvas.getBoundingClientRect();
-    const wrap = document.getElementById('cropCanvasWrap');
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    // Account for canvas scroll offset and actual display scale
-    // canvas.style.width may differ from canvas.width due to devicePixelRatio or explicit sizing
-    const displayW = newCanvas.offsetWidth || newCanvas.width;
-    const displayScale = newCanvas.width / displayW; // canvas internal vs display size
-    return {
-      x: Math.max(0, Math.min(((clientX - r.left) * displayScale) / cropScale, cropImg.width)),
-      y: Math.max(0, Math.min(((clientY - r.top) * displayScale) / cropScale, cropImg.height))
-    };
-  }
-
-  function startDrag(e){
-    e.preventDefault();
-    cropDragging = true;
-    cropStart = getPos(e);
-    cropCurrent = {...cropStart};
-    rect_el.classList.remove('hidden');
-    updateSelRect();
-  }
-
-  function moveDrag(e){
-    if(!cropDragging) return;
-    e.preventDefault();
-    cropCurrent = getPos(e);
-    updateSelRect();
-  }
-
-  function endDrag(e){
-    if(!cropDragging) return;
-    cropDragging = false;
-    rect_el.classList.add('hidden');
-    const x = Math.min(cropStart.x, cropCurrent.x);
-    const y = Math.min(cropStart.y, cropCurrent.y);
-    const w = Math.abs(cropCurrent.x - cropStart.x);
-    const h = Math.abs(cropCurrent.y - cropStart.y);
-    if(w < 5 || h < 5) return; // too small
-    // Crop this area from original image
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = Math.round(w);
-    offCanvas.height = Math.round(h);
-    offCanvas.getContext('2d').drawImage(cropImg, Math.round(x), Math.round(y), Math.round(w), Math.round(h), 0, 0, Math.round(w), Math.round(h));
-    const dataUrl = offCanvas.toDataURL('image/jpeg', 0.92);
-    cropZones.push({x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), label:`款式${cropZones.length+1}`, dataUrl});
-    renderCropCanvas();
-    renderCropSidebar();
-    if(cropZones.length > 0) document.getElementById('cropApplyBtn').style.display = '';
-  }
-
-  function updateSelRect(){
-    const cr = newCanvas.getBoundingClientRect();
-    const wr = document.getElementById('cropCanvasWrap').getBoundingClientRect();
-    const x1 = Math.min(cropStart.x, cropCurrent.x) * cropScale;
-    const y1 = Math.min(cropStart.y, cropCurrent.y) * cropScale;
-    const w = Math.abs(cropCurrent.x - cropStart.x) * cropScale;
-    const h = Math.abs(cropCurrent.y - cropStart.y) * cropScale;
-    rect_el.style.left = (cr.left - wr.left + x1) + 'px';
-    rect_el.style.top = (cr.top - wr.top + y1) + 'px';
-    rect_el.style.width = w + 'px';
-    rect_el.style.height = h + 'px';
-    // Show pixel dimensions as tooltip in rect
-    const pw = Math.round(Math.abs(cropCurrent.x - cropStart.x));
-    const ph = Math.round(Math.abs(cropCurrent.y - cropStart.y));
-    rect_el.title = `${pw} × ${ph} px`;
-  }
-
-  // Remove old listeners by cloning
-  const newCanvas = canvas.cloneNode(true);
-  canvas.parentNode.replaceChild(newCanvas, canvas);
-
-  newCanvas.addEventListener('mousedown', startDrag);
-  newCanvas.addEventListener('mousemove', moveDrag);
-  newCanvas.addEventListener('mouseup', endDrag);
-  newCanvas.addEventListener('touchstart', startDrag, {passive:false});
-  newCanvas.addEventListener('touchmove', moveDrag, {passive:false});
-  newCanvas.addEventListener('touchend', endDrag);
+function removeCropZone(i){
+  cropZones.splice(i,1);
+  // Redraw markers
+  const overlay = document.getElementById('cropSelOverlay');
+  const markers = overlay.querySelectorAll('div:not(#activeCropBox)');
+  markers.forEach(m=>m.remove());
+  cropZones.forEach((z,idx)=>{
+    const marker = document.createElement('div');
+    marker.style.cssText = `position:absolute;border:2px solid #C9826B;background:rgba(201,130,107,0.12);left:${z.fx1*100}%;top:${z.fy1*100}%;width:${z.fw*100}%;height:${z.fh*100}%;pointer-events:none`;
+    marker.innerHTML = `<div style="background:#C9826B;color:#fff;font-size:11px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-block">款式${idx+1}</div>`;
+    overlay.appendChild(marker);
+  });
+  renderCropSidebar();
+  if(!cropZones.length) document.getElementById('cropApplyBtn').style.display='none';
 }
+
+function clearCrops(){
+  cropZones = [];
+  document.getElementById('cropSelOverlay').innerHTML = '';
+  setupCropDrag();
+  renderCropSidebar();
+  document.getElementById('cropApplyBtn').style.display='none';
+}
+
+function applyCrops(){
+  if(!cropZones.length){showToast('請先框選顏色區域');return;}
+  cropZones.forEach((z,i)=>{
+    imgs.push({id:Date.now()+i+Math.random(), b64:z.dataUrl, type:'image/jpeg'});
+  });
+  renderThumbs();
+  const variantsEl = document.getElementById('prodVariants');
+  if(variantsEl && !variantsEl.value.trim()){
+    variantsEl.value = cropZones.map(z=>z.label).join('\n');
+  }
+  closeCropTool();
+  showToast(`✓ 已裁切 ${cropZones.length} 個款式並加入照片`);
+}
+
+function zoomCrop(delta){ /* no-op, CSS handles display size */ }
 
 function renderCropSidebar(){
   const sidebar = document.getElementById('cropSidebar');
