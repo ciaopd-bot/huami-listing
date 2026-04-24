@@ -1403,12 +1403,20 @@ function buildPost(){
   updateRfCharCount(introBlock);
   // Write full post to unified textarea
   const fullPost=[titleLine,introBlock,'',specBlock,s.notes].join('\n');
+  console.log('buildPost fullPost length:', fullPost.length, 'titleLine:', titleLine.slice(0,30));
   const up=document.getElementById('unifiedPost');
-  if(up){ up.value=fullPost; updateUnifiedChar(); }
+  console.log('unifiedPost element:', up ? 'found' : 'NOT FOUND');
+  if(up){
+    up.value=fullPost;
+    up.dispatchEvent(new Event('input')); // trigger any listeners
+    updateUnifiedChar();
+    console.log('unifiedPost.value set, length:', up.value.length);
+  }
   if(currentResult.imageUrls?.length){renderImageResults(currentResult.imageUrls);document.getElementById('imgResultSection').style.display='block';}
   if(currentResult.reviews?.length){renderReviews(currentResult.reviews);document.getElementById('reviewSection').style.display='block';}
   document.getElementById('emptyState').style.display='none';
   document.getElementById('resultPanel').style.display='block';
+  console.log('resultPanel shown, unifiedPost value length:', document.getElementById('unifiedPost')?.value?.length);
   setStatus('文案已產生');
   document.querySelector('.main-area').scrollTop=0;
   updateAdminUI();
