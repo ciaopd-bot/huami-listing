@@ -205,13 +205,20 @@ textarea::placeholder{color:var(--ink-light)}
 .product-card-name{font-size:14px;font-weight:500;color:var(--ink);flex:1;line-height:1.4}
 .product-card-price{font-size:13px;color:var(--rose);font-weight:500;white-space:nowrap}
 .variant-grid{display:grid;gap:6px}
-.variant-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--cream);border-radius:8px;border:1px solid var(--border)}
+.variant-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--cream);border-radius:8px;border:1px solid var(--border);transition:background 0.15s}
+.variant-row.selected{background:var(--petal);border-color:var(--rose-light)}
+.variant-row.disabled{opacity:0.45}
+.variant-check{width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:var(--rose)}
 .variant-label{flex:1;font-size:12px;color:var(--ink-mid)}
+.variant-total{font-size:11px;color:var(--ink-light);white-space:nowrap;min-width:40px;text-align:right}
+.variant-total.has-total{color:var(--leaf);font-weight:500}
 .variant-qty{display:flex;align-items:center;gap:6px}
 .qty-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:var(--white);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Noto Sans TC',sans-serif;transition:all 0.15s;color:var(--ink-mid)}
 .qty-btn:hover{border-color:var(--rose);color:var(--rose)}
 .qty-display{width:36px;text-align:center;font-size:20px;font-weight:700;color:var(--ink);line-height:1}
 .qty-display.has-qty{color:var(--rose)}
+.batch-info{font-size:11px;color:var(--ink-light);margin-top:4px;padding:4px 8px;background:var(--leaf-light);border-radius:6px;display:none}
+.batch-info.on{display:block}
 .order-summary-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--ink);margin-bottom:12px}
 .order-item{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);gap:8px}
 .order-item:last-of-type{border-bottom:none}
@@ -278,6 +285,18 @@ input.field-error::placeholder{color:#C9826B}
   .order-page{grid-template-columns:1fr;height:auto}
   .order-right{border-left:none;border-top:1px solid var(--border)}
   .main-area{height:auto}
+  .app-nav{flex-wrap:wrap;height:auto;padding:8px 1rem;gap:4px}
+  .nav-tabs{order:2;width:100%;overflow-x:auto;border-top:1px solid var(--border);padding-top:4px}
+  .nav-tab{padding:0 12px;font-size:11px;white-space:nowrap}
+  .nav-right{order:1;margin-left:auto}
+  .sidebar{max-height:60vh;overflow-y:auto}
+  .main-inner{padding:1rem}
+  .main-header{flex-direction:column;align-items:flex-start}
+  .result-card .rf-label{flex-direction:column;align-items:flex-start;gap:6px}
+  .order-left{padding:1rem}
+  .order-right{padding:1rem}
+  .calc-row{flex-wrap:wrap}
+  .calc-label{min-width:55px}
 }
 </style>
 </head>
@@ -385,7 +404,7 @@ input.field-error::placeholder{color:#C9826B}
                   <div class="calc-label">國別</div>
                   <select class="calc-select" id="calcCountry" onchange="onCountryChange()">
                     <option value="JP">🇯🇵 日本</option>
-                    <option value="KR">🇰🇷 韓圓</option>
+                    <option value="KR" selected>🇰🇷 韓圓</option>
                     <option value="CN">🇨🇳 中國</option>
                     <option value="TH">🇹🇭 泰國</option>
                   </select>
@@ -474,6 +493,18 @@ input.field-error::placeholder{color:#C9826B}
           <div class="tab-panel" id="tab-settings">
             <div class="notice">每次開新團更新一次，之後產生的文案自動套用。</div>
             <div class="section">
+              <div class="sec-label">訂價計算預設值</div>
+              <div class="field-row">
+                <label>預設國別（每次開啟工具時自動選擇）</label>
+                <select id="cfg-default-country" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-family:'Noto Sans TC',sans-serif;font-size:13px;background:var(--white);color:var(--ink);outline:none" onchange="saveDefaultCountry()">
+                  <option value="JP">🇯🇵 日本</option>
+                  <option value="KR">🇰🇷 韓國</option>
+                  <option value="CN">🇨🇳 中國</option>
+                  <option value="TH">🇹🇭 泰國</option>
+                </select>
+              </div>
+            </div>
+            <div class="section">
               <div class="sec-label">開團名稱</div>
               <div class="field-row"><label>團名（# 標籤同步）</label><input type="text" id="cfg-teamname" value="花開未滿團"/></div>
               <div class="field-row"><label>本團結單 / 出貨說明</label><input type="text" id="cfg-cutoff" value="四月下旬結單，五月上旬理貨後開始出貨"/></div>
@@ -526,6 +557,7 @@ EX：+1
                 <button class="btn-regen" onclick="regenDesc()">↺ 重新產生</button>
                 <button class="btn-regen" style="border-color:#a8d4a8;color:#3a7a3a;background:var(--leaf-light)" onclick="showSendToOrderModal()">📦 加入訂貨清單</button>
                 <button class="btn-regen" style="border-color:var(--blue-border);color:var(--blue);background:var(--blue-light)" onclick="nextProduct()">＋ 下一個商品</button>
+                <button class="btn-regen" style="border-color:var(--purple-border);color:var(--purple);background:var(--purple-light)" onclick="sharePost()" id="shareBtn">📤 分享</button>
                 <button class="btn-copy-all" id="copyAllBtn" onclick="copyAll()">📋 複製全文</button>
               </div>
             </div>
@@ -578,7 +610,8 @@ EX：+1
           <div class="main-title">訂貨管理</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-dark btn-sm" onclick="showAddProductModal()">+ 新增商品</button>
-            <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空數量</button>
+            <button class="btn btn-outline btn-sm" onclick="clearAllOrders()">清空本次</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="resetAllTotals()">清空累計</button>
           </div>
         </div>
         <div class="notice notice-blue" style="margin-bottom:1rem">上架的商品統一在這裡管理。點 ＋／－ 填入各款式訂購數量，右側會即時統計，最後輸出成訂貨圖片給廠商。</div>
@@ -595,6 +628,7 @@ EX：+1
         <div class="order-summary-title">📋 本次訂貨彙總</div>
         <div id="orderSummary"><div class="order-empty">尚未填入數量</div></div>
         <div class="order-actions">
+          <button class="btn btn-leaf" onclick="confirmBatch()">✓ 確認本批訂貨（加入累計）</button>
           <button class="btn btn-rose" onclick="exportOrderImage()">輸出訂貨圖片</button>
           <button class="btn btn-outline" onclick="copyOrderText()">複製訂貨文字</button>
           <div id="exportPreview" class="export-preview" style="display:none"></div>
@@ -916,6 +950,10 @@ function loadSettings() {
     if (s.notes) document.getElementById('cfg-notes').value=s.notes;
   } catch(e){}
   try { styleSamples = JSON.parse(localStorage.getItem(STYLE_KEY)||'[]'); } catch(e){}
+  // Restore default country in settings tab
+  const savedCountry = localStorage.getItem('huakai_default_country') || 'KR';
+  const cfgSel = document.getElementById('cfg-default-country');
+  if (cfgSel) cfgSel.value = savedCountry;
   try { products = JSON.parse(localStorage.getItem(PRODUCTS_KEY)||'[]'); } catch(e){}
 }
 
@@ -975,29 +1013,79 @@ function handleFiles(files){
   });
 }
 let dragSrcIdx=null;
+let dragDropDone=false;
+
 function renderThumbs(){
   const g=document.getElementById('thumbGrid');
   if(!imgs.length){dz.style.display='block';g.style.display='none';g.innerHTML='';return;}
   dz.style.display='none';g.style.display='grid';g.innerHTML='';
   imgs.forEach((img,i)=>{
     const d=document.createElement('div');
-    d.className='thumb';d.draggable=true;d.style.cursor='grab';
+    d.className='thumb';
+    d.draggable=true;
+    d.style.cursor='grab';
     d.dataset.idx=i;
-    d.innerHTML=`<img src="${img.b64}" draggable="false"/><button class="thumb-rm" onclick="rmImg(${img.id})">✕</button><div style="position:absolute;bottom:2px;left:3px;font-size:9px;color:#fff;background:rgba(0,0,0,0.4);border-radius:3px;padding:1px 4px">${i+1}</div>`;
-    d.addEventListener('dragstart',e=>{dragSrcIdx=i;d.style.opacity='0.4';});
-    d.addEventListener('dragend',e=>{d.style.opacity='1';renderThumbs();});
-    d.addEventListener('dragover',e=>{e.preventDefault();d.style.borderColor='var(--rose)';});
-    d.addEventListener('dragleave',e=>{d.style.borderColor='';});
-    d.addEventListener('drop',e=>{
-      e.preventDefault();d.style.borderColor='';
-      if(dragSrcIdx===null||dragSrcIdx===i)return;
-      const moved=imgs.splice(dragSrcIdx,1)[0];
-      imgs.splice(i,0,moved);
-      dragSrcIdx=null;renderThumbs();
+    d.innerHTML=`<img src="${img.b64}" draggable="false" style="pointer-events:none"/>`+
+      `<button class="thumb-rm" onclick="event.stopPropagation();rmImg(${img.id})">✕</button>`+
+      `<div style="position:absolute;bottom:2px;left:3px;font-size:9px;color:#fff;background:rgba(0,0,0,0.5);border-radius:3px;padding:1px 4px;pointer-events:none">${i+1}</div>`;
+
+    d.addEventListener('dragstart', e=>{
+      dragSrcIdx = i;
+      dragDropDone = false;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+      setTimeout(()=>{ d.style.opacity='0.35'; }, 0);
     });
+
+    d.addEventListener('dragend', e=>{
+      d.style.opacity='1';
+      // Only re-render if drop didn't already handle it
+      if(!dragDropDone) renderThumbs();
+      dragSrcIdx=null;
+      dragDropDone=false;
+    });
+
+    d.addEventListener('dragover', e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      d.style.outline='2px solid var(--rose)';
+      d.style.outlineOffset='2px';
+    });
+
+    d.addEventListener('dragleave', e=>{
+      d.style.outline='';
+      d.style.outlineOffset='';
+    });
+
+    d.addEventListener('drop', e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      d.style.outline='';
+      d.style.outlineOffset='';
+      const srcIdx = parseInt(e.dataTransfer.getData('text/plain'));
+      const destIdx = i;
+      if(srcIdx === destIdx || isNaN(srcIdx)) return;
+      const moved = imgs.splice(srcIdx, 1)[0];
+      imgs.splice(destIdx, 0, moved);
+      dragDropDone = true;
+      dragSrcIdx = null;
+      renderThumbs();
+    });
+
     g.appendChild(d);
   });
-  if(imgs.length<10){const a=document.createElement('div');a.className='add-more';a.textContent='+';a.title='新增更多照片';a.onclick=triggerUpload;g.appendChild(a);}
+
+  if(imgs.length<10){
+    const a=document.createElement('div');
+    a.className='add-more';
+    a.textContent='+';
+    a.title='新增更多照片';
+    a.onclick=triggerUpload;
+    // Prevent drop on add-more button
+    a.addEventListener('dragover',e=>e.preventDefault());
+    a.addEventListener('drop',e=>e.preventDefault());
+    g.appendChild(a);
+  }
 }
 function rmImg(id){imgs=imgs.filter(i=>i.id!==id);renderThumbs();}
 
@@ -1260,7 +1348,7 @@ function confirmSendToOrder(){
   const thumb=imgs.length>0?imgs[0].b64:null;
   const product={
     id:Date.now(),name,vendor,price,thumb,
-    variants:variants.map(v=>({label:v,qty:0}))
+    variants:variants.map(v=>({label:v,qty:0,checked:true,totalOrdered:0}))
   };
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
@@ -1280,7 +1368,7 @@ function confirmAddProduct(){
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
   const product={
     id:Date.now(),name,vendor,price,
-    variants:variants.map(v=>({label:v,qty:0}))
+    variants:variants.map(v=>({label:v,qty:0,checked:true,totalOrdered:0}))
   };
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
@@ -1308,21 +1396,47 @@ function renderProducts(){
           <button class="product-add-btn" style="color:var(--red);border-color:var(--red-border)" onclick="removeProduct(${pi})">✕ 刪除</button>
         </div>
       </div>
+      <div style="font-size:11px;color:var(--ink-light);margin-bottom:6px;display:flex;justify-content:space-between">
+        <span>☑ 勾選＝納入本次訂貨　數字＝本次數量　綠色＝累計已訂</span>
+      </div>
       <div class="variant-grid">
-        ${p.variants.map((v,vi)=>`
-          <div class="variant-row">
+        ${p.variants.map((v,vi)=>{
+          const checked=v.checked!==false;
+          const total=v.totalOrdered||0;
+          return `
+          <div class="variant-row ${checked?'selected':''}" id="vrow-${pi}-${vi}">
+            <input type="checkbox" class="variant-check" ${checked?'checked':''} onchange="toggleVariant(${pi},${vi},this.checked)"/>
             <div class="variant-label">${v.label}</div>
+            <div class="variant-total ${total>0?'has-total':''}" title="累計已訂">已訂${total}</div>
             <div class="variant-qty">
-              <button class="qty-btn" onclick="changeQty(${pi},${vi},-1)">−</button>
+              <button class="qty-btn" onclick="changeQty(${pi},${vi},-1)" ${!checked?'disabled':''}>−</button>
               <div class="qty-display ${v.qty>0?'has-qty':''}" id="qty-${pi}-${vi}">${v.qty}</div>
-              <button class="qty-btn" onclick="changeQty(${pi},${vi},1)">＋</button>
+              <button class="qty-btn" onclick="changeQty(${pi},${vi},1)" ${!checked?'disabled':''}>＋</button>
             </div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
     </div>`).join('');
 }
 
+function toggleVariant(pi,vi,checked){
+  products[pi].variants[vi].checked = checked;
+  if(!checked) products[pi].variants[vi].qty = 0;
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  // Update row style
+  const row=document.getElementById(`vrow-${pi}-${vi}`);
+  if(row){
+    row.className='variant-row'+(checked?' selected':'');
+    const btns=row.querySelectorAll('.qty-btn');
+    btns.forEach(b=>b.disabled=!checked);
+  }
+  const el=document.getElementById(`qty-${pi}-${vi}`);
+  if(el){el.textContent=0;el.className='qty-display';}
+  renderOrderSummary();
+}
+
 function changeQty(pi,vi,delta){
+  if(products[pi].variants[vi].checked===false)return;
   products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   const el=document.getElementById(`qty-${pi}-${vi}`);
@@ -1336,10 +1450,33 @@ function removeProduct(pi){
   renderProducts();renderOrderSummary();
 }
 
+function confirmBatch(){
+  let total=0;
+  products.forEach(p=>p.variants.forEach(v=>{
+    if(v.checked!==false && v.qty>0){
+      v.totalOrdered=(v.totalOrdered||0)+v.qty;
+      total+=v.qty;
+      v.qty=0;
+    }
+  }));
+  if(!total){showToast('尚未填入任何數量');return;}
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  renderProducts();renderOrderSummary();
+  showToast(`已確認 ${total} 件，已加入累計數量`);
+}
+
 function clearAllOrders(){
+  if(!confirm('清空本次數量？（累計已訂不受影響）')) return;
   products.forEach(p=>p.variants.forEach(v=>v.qty=0));
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
-  renderProducts();renderOrderSummary();showToast('已清空所有數量');
+  renderProducts();renderOrderSummary();showToast('已清空本次數量');
+}
+
+function resetAllTotals(){
+  if(!confirm('確定要清空所有累計已訂數量嗎？')) return;
+  products.forEach(p=>p.variants.forEach(v=>{v.totalOrdered=0;v.qty=0;}));
+  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  renderProducts();renderOrderSummary();showToast('已清空所有累計數量');
 }
 
 function renderOrderSummary(){
@@ -1347,7 +1484,7 @@ function renderOrderSummary(){
   const items=[];
   products.forEach(p=>{
     p.variants.forEach(v=>{
-      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price,vendor:p.vendor,thumb:p.thumb||null});
+      if(v.checked!==false && v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,price:p.price,vendor:p.vendor,thumb:p.thumb||null,totalOrdered:v.totalOrdered||0});
     });
   });
   if(!items.length){container.innerHTML='<div class="order-empty">尚未填入數量</div>';return;}
@@ -1386,8 +1523,8 @@ function exportOrderImage(){
   const COLS=3, CELL=180, GAP=12, PAD=20;
   const ROWS=Math.ceil(items.length/COLS);
   const W=COLS*CELL+(COLS-1)*GAP+PAD*2;
-  const HEADER_H=70, FOOTER_H=50;
-  const H=HEADER_H+ROWS*(CELL+GAP)-GAP+FOOTER_H+PAD*2;
+  const HEADER_H=32, FOOTER_H=0;
+  const H=HEADER_H+ROWS*(CELL+GAP)-GAP+PAD*2;
 
   const canvas=document.getElementById('orderCanvas');
   canvas.width=W; canvas.height=H;
@@ -1396,13 +1533,9 @@ function exportOrderImage(){
   // Background
   ctx.fillStyle='#FAF8F3'; ctx.fillRect(0,0,W,H);
 
-  // Header
-  ctx.fillStyle='#C9826B'; ctx.fillRect(0,0,W,HEADER_H);
-  ctx.fillStyle='#fff'; ctx.font='bold 18px serif'; ctx.textAlign='center';
-  ctx.fillText('花開未滿團 訂貨單',W/2,28);
-  ctx.font='12px sans-serif';
-  ctx.fillText(new Date().toLocaleDateString('zh-TW'),W/2,48);
-  ctx.fillText(`共 ${items.reduce((a,i)=>a+i.qty,0)} 件`,W/2,65);
+  // Header — 只顯示時間，不要色塊和標題
+  ctx.fillStyle='#9C8880'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(new Date().toLocaleDateString('zh-TW') + '　共 ' + items.reduce((a,i)=>a+i.qty,0) + ' 件', W/2, 22);
 
   // Draw items as grid
   const drawItems = () => {
@@ -1459,11 +1592,11 @@ function exportOrderImage(){
       // Qty badge
       ctx.fillStyle='#C9826B';
       ctx.beginPath();
-      if(ctx.roundRect){ctx.roundRect(x+CELL/2-24,QTY_Y+18,48,22,6);}
-      else{ctx.rect(x+CELL/2-24,QTY_Y+18,48,22);}
+      if(ctx.roundRect){ctx.roundRect(x+4,QTY_Y+14,CELL-8,28,6);}
+      else{ctx.rect(x+4,QTY_Y+14,CELL-8,28);}
       ctx.fill();
-      ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
-      ctx.fillText(`× ${item.qty}`,x+CELL/2,QTY_Y+34);
+      ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(`×${item.qty}`,x+CELL/2,QTY_Y+36);
     });
   };
 
@@ -1484,12 +1617,9 @@ function exportOrderImage(){
 }
 
 function finishExport(canvas){
-  // Footer
+  // No footer bar
   const ctx=canvas.getContext('2d');
   const W=canvas.width, H=canvas.height;
-  ctx.fillStyle='#C9826B'; ctx.fillRect(0,H-50,W,50);
-  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('花開未滿團 內部訂貨用',W/2,H-20);
   const imgUrl=canvas.toDataURL('image/png');
   const a=document.createElement('a');
   a.download=`花開未滿團訂貨單_${new Date().toLocaleDateString('zh-TW').replace(/\//g,'')}.png`;
@@ -1500,6 +1630,19 @@ function finishExport(canvas){
 // ══════════════════════════════════════════════
 // COPY HELPERS
 // ══════════════════════════════════════════════
+function sharePost(){
+  const text = getFullText();
+  if(!text){showToast('請先產生上架文');return;}
+  if(navigator.share){
+    navigator.share({title:'花開未滿團上架文', text})
+      .catch(()=>{});
+  } else {
+    // Fallback: copy
+    navigator.clipboard.writeText(text);
+    showToast('已複製全文（此裝置不支援直接分享）');
+  }
+}
+
 function copyField(id){navigator.clipboard.writeText(document.getElementById(id).textContent);showToast('已複製');}
 function copyFieldTA(id){navigator.clipboard.writeText(document.getElementById(id).value);showToast('已複製');}
 function copyAll(){
@@ -1552,6 +1695,14 @@ const COUNTRY_CONFIG = {
 let exchangeRates = {}; // live rates: TWD per 1 foreign
 let calcVisible = true;
 
+function saveDefaultCountry() {
+  const val = document.getElementById('cfg-default-country')?.value || 'KR';
+  localStorage.setItem('huakai_default_country', val);
+  const sel = document.getElementById('calcCountry');
+  if (sel) { sel.value = val; onCountryChange(); }
+  showToast(`預設國別已設為 ${val}`);
+}
+
 function toggleCalc() {
   calcVisible = !calcVisible;
   document.getElementById('calcBody').style.display = calcVisible ? 'block' : 'none';
@@ -1569,7 +1720,8 @@ function fetchRates() {
 }
 
 function onCountryChange() {
-  const country = document.getElementById('calcCountry')?.value || 'JP';
+  const country = document.getElementById('calcCountry')?.value || 'KR';
+  localStorage.setItem('huakai_default_country', country);
   const cfg = COUNTRY_CONFIG[country];
   // Set rate input
   const rateEl = document.getElementById('calcRate');
@@ -1695,10 +1847,13 @@ function updateCalc() {
   // Store last result
   window._lastCalc = { retail, wholesale, totalCost, country };
 
-  // Auto-apply retail price to price field
+  // Auto-apply retail price to price field with unit detection
   const priceEl = document.getElementById('prodPrice');
   if (priceEl) {
-    priceEl.value = `${retail}元`;
+    const vol = (document.getElementById('prodVol')?.value || '').trim();
+    const unitMatch = vol.match(/[盒件款包袋組套罐瓶片條個本冊份]/);
+    const unit = unitMatch ? unitMatch[0] : '件';
+    priceEl.value = `𝙉𝙏：${retail}元/${unit}`;
     priceEl.classList.remove('field-error');
     priceEl.style.borderColor = 'var(--leaf)';
     setTimeout(()=>{ priceEl.style.borderColor = ''; }, 1500);
@@ -1709,8 +1864,18 @@ function applyCalcPrice(type) {
   if (!window._lastCalc) return;
   const price = type === 'wholesale' ? window._lastCalc.wholesale : window._lastCalc.retail;
   const priceInput = document.getElementById('prodPrice');
-  if (priceInput) priceInput.value = `${price}元`;
-  showToast(`已套用${type==='wholesale'?'批發':'零售'}價 NT ${price} 元`);
+  if (!priceInput) return;
+
+  // Auto-detect unit from volume field
+  const vol = (document.getElementById('prodVol')?.value || '').trim();
+  const unitMatch = vol.match(/[盒件款包袋組套罐瓶片條個本冊份]/);
+  const unit = unitMatch ? unitMatch[0] : '件';
+
+  priceInput.value = `𝙉𝙏：${price}元/${unit}`;
+  priceInput.classList.remove('field-error');
+  priceInput.style.borderColor = 'var(--leaf)';
+  setTimeout(()=>{ priceInput.style.borderColor = ''; }, 1500);
+  showToast(`已套用 𝙉𝙏：${price}元/${unit}`);
 }
 
 // ══════════════════════════════════════════════
@@ -1841,8 +2006,13 @@ loadHistory();
 renderStyleTab();
 updateAdminUI();
 fetchRates();
-// Init calc defaults
-setTimeout(()=>onCountryChange(), 100);
+// Init calc - restore last used country
+setTimeout(()=>{
+  const saved = localStorage.getItem('huakai_default_country') || 'KR';
+  const sel = document.getElementById('calcCountry');
+  if (sel) sel.value = saved;
+  onCountryChange();
+}, 100);
 </script>
 </body>
 </html>
