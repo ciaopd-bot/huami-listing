@@ -889,11 +889,12 @@ async function runAI(){
   const btn=document.getElementById('aiBtn');
   btn.disabled=true;setStatus('AI 識別中...',true);setProgress(10,'準備中...');
   const s=getSettings();
-  const imgBlocks=imgs.slice(0,4).map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.b64.split(',')[1]}}));
+  const imgBlocks=imgs.slice(0,1).map(i=>({type:'image',source:{type:'base64',media_type:i.type,data:i.b64.split(',')[1]}}));
   const supplierSection=supplierCopy?`\n廠商文案（${currentMode==='direct'?'直接沿用':'參考用，不要照抄'}）：\n"""\n${supplierCopy}\n"""\n`:'';
   const urlSection=refUrls.length?`\n參考網址：\n${refUrls.map((u,i)=>`${i+1}. ${u}`).join('\n')}\n`:'';
   const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`請搜尋這個商品的台灣網友評價（PTT、Dcard、FB社團）和商品圖片 URL（3〜6 個）。`;
-  const modeInstruction=currentMode==='direct'?'文案模式：直接沿用廠商文案，只做格式調整。':`文案模式：MIX 改寫。${STYLE_PROMPT}${getStyleExamplesBlock()}`;
+  const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
+  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
   const prompt=`你是「${s.teamname}」的上架文案小幫手。${supplierSection}${urlSection}
 任務：1. 分析照片（若有）  2. ${searchInstruction}
 ${modeInstruction}
