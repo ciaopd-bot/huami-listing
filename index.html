@@ -22,7 +22,7 @@ html,body{height:100%;background:var(--cream);color:var(--ink);font-family:'Noto
 .app-shell{display:flex;flex-direction:column;height:100vh}
 .app-nav{display:flex;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;padding:0 1.5rem;height:52px;gap:0}
 .nav-logo{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--ink);margin-right:1.5rem;white-space:nowrap}
-.nav-logo span{font-size:11px;font-weight:400;color:var(--ink-light);margin-left:6px;font-family:'Noto Sans TC',sans-serif}
+.nav-logo span{font-size:13px;font-weight:400;color:var(--ink-light);margin-left:6px;font-family:'Noto Sans TC',sans-serif}
 .nav-tabs{display:flex;gap:0;flex:1}
 .nav-tab{padding:0 18px;height:52px;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--ink-light);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
 .nav-tab.active{color:var(--rose);border-bottom-color:var(--rose)}
@@ -354,7 +354,7 @@ input.field-error::placeholder{color:#C9826B}
 
   <!-- Top nav -->
   <nav class="app-nav">
-    <div class="nav-logo">🌸 huami <span>開團工具</span></div>
+    <div class="nav-logo">🌸 huami 開團工具<span id="nav-teamname" style="color:var(--rose);margin-left:6px">｜花開未滿團</span></div>
     <div class="nav-tabs">
       <div class="nav-tab active" onclick="switchPage('listing')">上架文產生</div>
       <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
@@ -551,7 +551,7 @@ input.field-error::placeholder{color:#C9826B}
             </div>
             <div class="section">
               <div class="sec-label">開團名稱</div>
-              <div class="field-row"><label>團名（# 標籤同步）</label><input type="text" id="cfg-teamname" value="花開未滿團"/></div>
+              <div class="field-row"><label>團名（# 標籤同步）</label><input type="text" id="cfg-teamname" value="花開未滿團" oninput="updateNavTeamName()"/></div>
               <div class="field-row"><label>本團結單 / 出貨說明</label><input type="text" id="cfg-cutoff" value="四月下旬結單，五月上旬理貨後開始出貨"/></div>
             </div>
             <div class="section">
@@ -996,6 +996,8 @@ function loadSettings() {
     if (s.notes) document.getElementById('cfg-notes').value=s.notes;
   } catch(e){}
   try { styleSamples = JSON.parse(localStorage.getItem(STYLE_KEY)||'[]'); } catch(e){}
+  // Sync nav team name
+  setTimeout(updateNavTeamName, 50);
   // Restore default country in settings tab
   const savedCountry = localStorage.getItem('huakai_default_country') || 'KR';
   const cfgSel = document.getElementById('cfg-default-country');
@@ -1012,8 +1014,15 @@ function getSettings() {
   };
 }
 
+function updateNavTeamName(){
+  const teamname = document.getElementById('cfg-teamname')?.value.trim() || '花開未滿團';
+  const el = document.getElementById('nav-teamname');
+  if(el) el.textContent = '｜' + teamname;
+}
+
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(getSettings()));
+  updateNavTeamName();
   const b=document.getElementById('savedBadge'); b.classList.add('on');
   setTimeout(()=>b.classList.remove('on'),2500); showToast('設定已儲存');
 }
