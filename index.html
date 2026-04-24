@@ -253,6 +253,33 @@ textarea::placeholder{color:var(--ink-light)}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 input.field-error::placeholder{color:#C9826B}
 
+/* ── Crop tool ── */
+.crop-overlay{position:fixed;inset:0;background:rgba(44,36,32,0.7);z-index:300;display:flex;align-items:stretch;justify-content:stretch;padding:0}
+.crop-overlay.hidden{display:none}
+.crop-modal{background:var(--white);width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.crop-header{padding:0.85rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.crop-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;color:var(--ink)}
+.crop-body{display:grid;grid-template-columns:1fr 220px;flex:1;overflow:hidden;min-height:0}
+.crop-canvas-wrap{position:relative;overflow:auto;background:#e8e8e8;cursor:crosshair;display:flex;align-items:flex-start;justify-content:flex-start}
+.crop-canvas-wrap canvas{display:block;cursor:crosshair}
+.crop-sidebar{border-left:1px solid var(--border);overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--cream)}
+.crop-footer{padding:10px 1.25rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;flex-wrap:wrap}
+.crop-zone{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white)}
+.crop-zone-img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.crop-zone-label{padding:5px 8px;display:flex;align-items:center;gap:5px}
+.crop-zone-label input{flex:1;border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:11px;font-family:'Noto Sans TC',sans-serif;outline:none;background:var(--white);color:var(--ink)}
+.crop-zone-rm{background:none;border:none;cursor:pointer;color:var(--ink-light);font-size:12px;padding:2px 4px}
+.crop-zone-rm:hover{color:var(--rose)}
+.selection-rect{position:absolute;border:2px solid var(--rose);background:rgba(201,130,107,0.15);pointer-events:none}
+.crop-hint{font-size:11px;color:var(--ink-light);text-align:center;padding:8px 4px;line-height:1.5}
+.crop-upload-btn{width:100%;padding:10px;border:1.5px dashed var(--border);border-radius:8px;background:var(--cream);cursor:pointer;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink-mid);text-align:center;transition:all 0.15s}
+.crop-upload-btn:hover{border-color:var(--rose);color:var(--rose);background:var(--petal)}
+@media(max-width:600px){
+  .crop-body{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  .crop-sidebar{border-left:none;border-top:1px solid var(--border);max-height:160px;flex-direction:row;flex-wrap:wrap}
+  .crop-zone{width:80px;flex-shrink:0}
+}
+
 /* ── Pricing calculator ── */
 .calc-section{background:var(--blue-light);border:1px solid var(--blue-border);border-radius:10px;padding:12px 14px;margin-bottom:10px}
 .calc-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -389,6 +416,7 @@ input.field-error::placeholder{color:#C9826B}
               </div>
               <div class="thumb-grid" id="thumbGrid" style="display:none"></div>
               <input type="file" id="fi" accept="image/*" multiple style="display:none"/>
+              <button onclick="openCropTool()" style="margin-top:6px;width:100%;padding:6px;border:1px dashed var(--rose-light);border-radius:7px;background:var(--petal);color:var(--rose-dark);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s">✂️ 廠商拼色圖裁切工具</button>
             </div>
 
             <div class="section">
@@ -609,7 +637,7 @@ EX：+1
             <div class="result-card">
               <div class="result-field">
                 <div class="rf-label">標題行 <span class="rf-copy" onclick="copyFieldTA('rf-title-ta')">複製</span></div>
-                <textarea class="rf-editable" id="rf-title-ta" rows="2" style="font-weight:500"></textarea>
+                <textarea class="rf-editable" id="rf-title-ta" rows="2" style="font-weight:500" oninput="syncTitleToIntro()"></textarea>
               </div>
               <div class="result-field">
                 <div class="rf-label">
@@ -771,7 +799,44 @@ EX：+1
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('sendToOrderModal')">取消</button>
-      <button class="btn btn-leaf" onclick="confirmSendToOrder()">加入並前往訂貨管理 →</button>
+      <button class="btn btn-leaf" onclick="confirmSendToOrder()">加入訂貨清單 ✓</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ CROP TOOL OVERLAY ══ -->
+<div class="crop-overlay hidden" id="cropOverlay">
+  <div class="crop-modal">
+    <div class="crop-header">
+      <div class="crop-title">✂️ 拼色圖裁切工具</div>
+      <button onclick="closeCropTool()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink-light);padding:4px">✕</button>
+    </div>
+    <div class="crop-body">
+      <!-- Canvas area -->
+      <div class="crop-canvas-wrap" id="cropCanvasWrap">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;padding:2rem" id="cropUploadArea">
+          <div style="font-size:40px;opacity:0.4">🖼️</div>
+          <button class="crop-upload-btn" onclick="document.getElementById('cropFileInput').click()">
+            點擊上傳廠商拼色圖
+          </button>
+          <div style="font-size:11px;color:var(--ink-light)">上傳後在圖上拖曳框選每個顏色區域</div>
+          <input type="file" id="cropFileInput" accept="image/*" style="display:none" onchange="loadCropImage(event)"/>
+        </div>
+        <canvas id="cropCanvas" style="display:none;max-width:100%;max-height:100%"></canvas>
+        <div class="selection-rect hidden" id="selectionRect"></div>
+      </div>
+      <!-- Sidebar: cropped zones -->
+      <div class="crop-sidebar" id="cropSidebar">
+        <div class="crop-hint" id="cropHint">上傳圖片後，在圖上拖曳框選每個顏色，框選後自動裁出並可命名</div>
+      </div>
+    </div>
+    <div class="crop-footer">
+      <button class="btn btn-outline btn-sm" onclick="clearCrops()" style="width:auto">清除全部</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('cropFileInput').click()" style="width:auto">換一張圖</button>
+      <button class="btn btn-outline btn-sm" onclick="zoomCrop(-0.2)" style="width:auto">縮小 −</button>
+      <button class="btn btn-outline btn-sm" onclick="zoomCrop(0.2)" style="width:auto">放大 ＋</button>
+      <button class="btn btn-rose btn-sm" id="cropApplyBtn" onclick="applyCrops()" style="width:auto;display:none">✓ 套用到上架商品照片</button>
     </div>
   </div>
 </div>
@@ -1303,7 +1368,7 @@ function buildPost(){
   if(hasError){showToast('請填寫紅色標示的必填欄位');return;}
   const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
   const titleLine=`${s.teamname}｜${name}`;
-  const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
+  const introBlock=`${titleLine}\n${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
   const size=document.getElementById('prodSize').value.trim();
   const variants=document.getElementById('prodVariants').value.trim();
   const variantLine=variants?'\n【款式】'+variants.split('\n').filter(Boolean).join('、'):'';
@@ -1334,6 +1399,20 @@ function updateRfCharCount(text){
   el.style.color=len>=300&&len<=500?'#7A9E7E':len>500?'#C9826B':'#9C8880';
 }
 function onIntroEdit(){updateRfCharCount(document.getElementById('rf-intro').value);}
+function syncTitleToIntro(){
+  const title = document.getElementById('rf-title-ta')?.value || '';
+  const intro = document.getElementById('rf-intro');
+  if(!intro) return;
+  const lines = intro.value.split('\n');
+  // First line of intro is team|product, second is price, rest is content
+  // Update first line to match title
+  if(lines.length > 0){
+    lines[0] = title;
+    intro.value = lines.join('\n');
+    updateRfCharCount(intro.value);
+  }
+}
+
 function getFullText(){
   const t=document.getElementById('rf-title-ta')?.value||'';
   const i=document.getElementById('rf-intro')?.value||'';
@@ -1413,7 +1492,7 @@ function confirmSendToOrder(){
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
-  // Flash the button in listing page if visible
+  // Flash the add button green to confirm
   const addBtn = document.querySelector('[onclick="showSendToOrderModal()"]');
   if(addBtn){
     const orig = addBtn.innerHTML;
@@ -1423,7 +1502,7 @@ function confirmSendToOrder(){
     addBtn.style.color = '#3a7a3a';
     setTimeout(()=>{ addBtn.innerHTML=orig; addBtn.style.background=''; addBtn.style.borderColor=''; addBtn.style.color=''; },2500);
   }
-  setTimeout(()=>switchPage('order'),600);
+  // Stay on current page, no auto-switch
 }
 
 function showAddProductModal(){openModal('addProductModal');['ap-name','ap-vendor','ap-price','ap-variants'].forEach(id=>document.getElementById(id).value='');}
@@ -1813,6 +1892,237 @@ function showToast(msg){
 }
 
 
+
+
+// ══════════════════════════════════════════════
+// CROP TOOL
+// ══════════════════════════════════════════════
+let cropImg = null;
+let cropScale = 1;
+let cropZones = []; // [{x,y,w,h,label,dataUrl}]
+let cropDragging = false;
+let cropStart = {x:0,y:0};
+let cropCurrent = {x:0,y:0};
+
+function openCropTool(){
+  document.getElementById('cropOverlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function zoomCrop(delta){
+  if(!cropImg) return;
+  cropScale = Math.max(0.3, Math.min(3, cropScale + delta));
+  const canvas = document.getElementById('cropCanvas');
+  // Draw at 1:1 with the image (cropScale applied via logical pixels)
+  canvas.width = Math.round(cropImg.width * cropScale);
+  canvas.height = Math.round(cropImg.height * cropScale);
+  // Don't set style.width/height - let canvas display at its natural pixel size
+  canvas.style.width = '';
+  canvas.style.height = '';
+  renderCropCanvas();
+}
+
+function closeCropTool(){
+  document.getElementById('cropOverlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function loadCropImage(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      cropImg = img;
+      cropZones = [];
+      renderCropCanvas();
+      renderCropSidebar();
+      document.getElementById('cropUploadArea').style.display = 'none';
+      document.getElementById('cropCanvas').style.display = 'block';
+      document.getElementById('cropApplyBtn').style.display = 'none';
+      document.getElementById('cropHint').textContent = '在圖上拖曳框選每個顏色區域';
+      setupCropEvents();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function renderCropCanvas(){
+  const canvas = document.getElementById('cropCanvas');
+  const wrap = document.getElementById('cropCanvasWrap');
+  if(!cropImg) return;
+  // Fit image to available space initially (user can zoom in/out)
+  const maxW = wrap.clientWidth - 8;
+  const maxH = wrap.clientHeight - 8;
+  cropScale = Math.min(maxW / cropImg.width, maxH / cropImg.height, 1);
+  // Minimum scale so image is always visible
+  cropScale = Math.max(cropScale, 0.2);
+  // Draw at 1:1 with the image (cropScale applied via logical pixels)
+  canvas.width = Math.round(cropImg.width * cropScale);
+  canvas.height = Math.round(cropImg.height * cropScale);
+  // Don't set style.width/height - let canvas display at its natural pixel size
+  canvas.style.width = '';
+  canvas.style.height = '';
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(cropImg, 0, 0, canvas.width, canvas.height);
+  // Draw existing zones
+  cropZones.forEach((z,i)=>{
+    ctx.strokeStyle = '#C9826B';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(z.x * cropScale, z.y * cropScale, z.w * cropScale, z.h * cropScale);
+    ctx.fillStyle = 'rgba(201,130,107,0.18)';
+    ctx.fillRect(z.x * cropScale, z.y * cropScale, z.w * cropScale, z.h * cropScale);
+    // Label badge
+    const lx = z.x * cropScale + 4;
+    const ly = z.y * cropScale + 4;
+    const label = z.label || `款式${i+1}`;
+    ctx.font = 'bold 14px sans-serif';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = '#C9826B';
+    ctx.fillRect(lx-2, ly-1, tw+10, 20);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, lx+3, ly+14);
+  });
+}
+
+function setupCropEvents(){
+  const canvas = document.getElementById('cropCanvas');
+  const rect_el = document.getElementById('selectionRect');
+
+  function getPos(e){
+    const r = newCanvas.getBoundingClientRect();
+    const wrap = document.getElementById('cropCanvasWrap');
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    // Account for canvas scroll offset and actual display scale
+    // canvas.style.width may differ from canvas.width due to devicePixelRatio or explicit sizing
+    const displayW = newCanvas.offsetWidth || newCanvas.width;
+    const displayScale = newCanvas.width / displayW; // canvas internal vs display size
+    return {
+      x: Math.max(0, Math.min(((clientX - r.left) * displayScale) / cropScale, cropImg.width)),
+      y: Math.max(0, Math.min(((clientY - r.top) * displayScale) / cropScale, cropImg.height))
+    };
+  }
+
+  function startDrag(e){
+    e.preventDefault();
+    cropDragging = true;
+    cropStart = getPos(e);
+    cropCurrent = {...cropStart};
+    rect_el.classList.remove('hidden');
+    updateSelRect();
+  }
+
+  function moveDrag(e){
+    if(!cropDragging) return;
+    e.preventDefault();
+    cropCurrent = getPos(e);
+    updateSelRect();
+  }
+
+  function endDrag(e){
+    if(!cropDragging) return;
+    cropDragging = false;
+    rect_el.classList.add('hidden');
+    const x = Math.min(cropStart.x, cropCurrent.x);
+    const y = Math.min(cropStart.y, cropCurrent.y);
+    const w = Math.abs(cropCurrent.x - cropStart.x);
+    const h = Math.abs(cropCurrent.y - cropStart.y);
+    if(w < 5 || h < 5) return; // too small
+    // Crop this area from original image
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = Math.round(w);
+    offCanvas.height = Math.round(h);
+    offCanvas.getContext('2d').drawImage(cropImg, Math.round(x), Math.round(y), Math.round(w), Math.round(h), 0, 0, Math.round(w), Math.round(h));
+    const dataUrl = offCanvas.toDataURL('image/jpeg', 0.92);
+    cropZones.push({x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), label:`款式${cropZones.length+1}`, dataUrl});
+    renderCropCanvas();
+    renderCropSidebar();
+    if(cropZones.length > 0) document.getElementById('cropApplyBtn').style.display = '';
+  }
+
+  function updateSelRect(){
+    const cr = newCanvas.getBoundingClientRect();
+    const wr = document.getElementById('cropCanvasWrap').getBoundingClientRect();
+    const x1 = Math.min(cropStart.x, cropCurrent.x) * cropScale;
+    const y1 = Math.min(cropStart.y, cropCurrent.y) * cropScale;
+    const w = Math.abs(cropCurrent.x - cropStart.x) * cropScale;
+    const h = Math.abs(cropCurrent.y - cropStart.y) * cropScale;
+    rect_el.style.left = (cr.left - wr.left + x1) + 'px';
+    rect_el.style.top = (cr.top - wr.top + y1) + 'px';
+    rect_el.style.width = w + 'px';
+    rect_el.style.height = h + 'px';
+    // Show pixel dimensions as tooltip in rect
+    const pw = Math.round(Math.abs(cropCurrent.x - cropStart.x));
+    const ph = Math.round(Math.abs(cropCurrent.y - cropStart.y));
+    rect_el.title = `${pw} × ${ph} px`;
+  }
+
+  // Remove old listeners by cloning
+  const newCanvas = canvas.cloneNode(true);
+  canvas.parentNode.replaceChild(newCanvas, canvas);
+
+  newCanvas.addEventListener('mousedown', startDrag);
+  newCanvas.addEventListener('mousemove', moveDrag);
+  newCanvas.addEventListener('mouseup', endDrag);
+  newCanvas.addEventListener('touchstart', startDrag, {passive:false});
+  newCanvas.addEventListener('touchmove', moveDrag, {passive:false});
+  newCanvas.addEventListener('touchend', endDrag);
+}
+
+function renderCropSidebar(){
+  const sidebar = document.getElementById('cropSidebar');
+  if(!cropZones.length){
+    sidebar.innerHTML = '<div class="crop-hint" id="cropHint">框選後裁切的顏色會出現在這裡</div>';
+    return;
+  }
+  sidebar.innerHTML = '';
+  cropZones.forEach((z,i)=>{
+    const div = document.createElement('div');
+    div.className = 'crop-zone';
+    div.innerHTML = `
+      <img class="crop-zone-img" src="${z.dataUrl}"/>
+      <div class="crop-zone-label">
+        <input type="text" value="${z.label}" placeholder="顏色名稱" onchange="cropZones[${i}].label=this.value;renderCropCanvas()"/>
+        <button class="crop-zone-rm" onclick="removeCropZone(${i})">✕</button>
+      </div>`;
+    sidebar.appendChild(div);
+  });
+}
+
+function removeCropZone(i){
+  cropZones.splice(i,1);
+  renderCropCanvas();
+  renderCropSidebar();
+  if(!cropZones.length) document.getElementById('cropApplyBtn').style.display = 'none';
+}
+
+function clearCrops(){
+  cropZones = [];
+  renderCropCanvas();
+  renderCropSidebar();
+  document.getElementById('cropApplyBtn').style.display = 'none';
+}
+
+function applyCrops(){
+  if(!cropZones.length){ showToast('請先框選顏色區域'); return; }
+  // Convert dataUrls to img objects and add to imgs array
+  cropZones.forEach((z, i)=>{
+    const id = Date.now() + i + Math.random();
+    imgs.push({id, b64: z.dataUrl, type: 'image/jpeg'});
+  });
+  renderThumbs();
+  // Also fill variants from zone labels
+  const variantsEl = document.getElementById('prodVariants');
+  if(variantsEl && !variantsEl.value.trim()){
+    variantsEl.value = cropZones.map(z=>z.label).join('\n');
+  }
+  closeCropTool();
+  showToast(`✓ 已裁切 ${cropZones.length} 個顏色並加入照片`);
+}
 
 // ══════════════════════════════════════════════
 // PRICING CALCULATOR (完整版)
