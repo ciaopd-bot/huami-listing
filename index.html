@@ -412,20 +412,13 @@ textarea::placeholder{color:var(--ink-light)}
                 </div>
                 <!-- Result -->
                 <div class="calc-result" id="calcResult" style="display:none">
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-                    <div style="flex:1;min-width:100px">
-                      <div style="font-size:11px;color:var(--ink-light);margin-bottom:2px">零售價</div>
-                      <div class="calc-result-main" id="calcRetail"></div>
-                    </div>
-                    <div style="flex:1;min-width:100px">
-                      <div style="font-size:11px;color:var(--ink-light);margin-bottom:2px">批發價</div>
-                      <div class="calc-result-main" style="color:var(--blue)" id="calcWholesale"></div>
-                    </div>
+                  <div style="margin-bottom:6px">
+                    <div style="font-size:11px;color:var(--ink-light);margin-bottom:2px">建議零售價</div>
+                    <div class="calc-result-main" id="calcRetail"></div>
                   </div>
                   <div class="calc-result-detail" id="calcResultDetail"></div>
-                  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-                    <button style="font-size:12px;padding:4px 10px;border:1px solid var(--rose-light);border-radius:6px;background:var(--petal);color:var(--rose-dark);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('retail')">套用零售價 →</button>
-                    <button style="font-size:12px;padding:4px 10px;border:1px solid var(--blue-border);border-radius:6px;background:var(--blue-light);color:var(--blue);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('wholesale')">套用批發價</button>
+                  <div style="margin-top:8px">
+                    <button style="font-size:12px;padding:5px 14px;border:1px solid var(--rose-light);border-radius:6px;background:var(--petal);color:var(--rose-dark);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('retail')">套用此售價 →</button>
                   </div>
                 </div>
               </div>
@@ -1510,7 +1503,7 @@ function showToast(msg){
 // 各國預設設定
 const COUNTRY_CONFIG = {
   JP: { currency:'JPY', rate:0.22,                shippingPerKg:200, label:'日本', taxMult:1.1 },
-  KR: { currency:'KRW', rate:1/42,                shippingPerKg:150, label:'韓國', taxMult:1.0 },
+  KR: { currency:'KRW', rate:1/42,                shippingPerKg:180, label:'韓國', taxMult:1.0 },
   CN: { currency:'CNY', rate:5.0,                 shippingPerKg:100, label:'中國', taxMult:1.0 },
   TH: { currency:'THB', rate:1.01,                shippingPerKg:120, label:'泰國', taxMult:1.0 },
 };
@@ -1663,13 +1656,12 @@ function updateCalc() {
   const wholesale = calcWholesalePrice(totalCost);
 
   document.getElementById('calcRetail').textContent = `NT ${retail}`;
-  document.getElementById('calcWholesale').textContent = `NT ${wholesale}`;
 
   const taxNote = cfg.taxMult > 1 ? `（含稅 ×${cfg.taxMult}）` : '';
   document.getElementById('calcResultDetail').innerHTML =
-    `原價 ${origPrice} ${cfg.currency}${taxNote} × ${customRate.toFixed(4)} = <b>NT ${Math.round(costTWD)}</b><br>` +
+    `原價 ${origPrice} ${cfg.currency}${taxNote} × ${customRate.toFixed(4)} = NT ${Math.round(costTWD)}<br>` +
     `${weightNote}<br>` +
-    `總成本 NT ${Math.round(totalCost)} → 零售 NT ${retail} / 批發 NT ${wholesale}`;
+    `總成本 NT ${Math.round(totalCost)} → 建議售價 NT ${retail}`;
 
   result.style.display = 'block';
 
