@@ -371,12 +371,17 @@ textarea::placeholder{color:var(--ink-light)}
                 <div style="font-size:11px;color:var(--ink-light);margin-top:2px">格式：國家・品牌 商品名</div>
               </div>
               <div class="row2">
-                <div class="field-row"><label>容量 / 規格</label><input type="text" id="prodVol" placeholder="例：10入"/></div>
-                <div class="field-row"><label>售價（NT）</label><input type="text" id="prodPrice" placeholder="例：388元/盒"/></div>
+                <div class="field-row"><label>容量 / 規格</label><input type="text" id="prodVol" placeholder="例：10入、288g"/></div>
+                <div class="field-row"><label>尺寸</label><input type="text" id="prodSize" placeholder="例：110-170碼、FREE SIZE"/></div>
+              </div>
+              <div class="field-row"><label>售價（NT）</label><input type="text" id="prodPrice" placeholder="例：388元/盒"/></div>
+              <div class="field-row">
+                <label>款式（顏色／口味／種類）<span style="font-size:11px;color:var(--ink-light);font-weight:400;margin-left:4px">AI 自動偵測，每行一個</span></label>
+                <textarea id="prodVariants" rows="3" placeholder="AI 識別後自動填入&#10;也可以自己輸入，每行一個&#10;例：米色&#10;黑色&#10;深藍" style="font-size:12px"></textarea>
               </div>
               <div class="field-row">
                 <label>商品介紹文</label>
-                <textarea id="prodDesc" rows="6" placeholder="AI 產生後可修改" oninput="updateCharCount()"></textarea>
+                <textarea id="prodDesc" rows="5" placeholder="AI 產生後可修改" oninput="updateCharCount()"></textarea>
                 <div class="char-count" id="charCount">0 字</div>
               </div>
             </div>
@@ -963,7 +968,8 @@ async function runAI(){
 任務：1. 分析照片（若有）  2. ${searchInstruction}
 ${modeInstruction}
 請以繁體中文回覆，格式為純 JSON，不要 markdown：
-{"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","desc":"完整商品介紹文","reviews":["網友心得"],"image_urls":["圖片URL"]}`;
+{"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","size":"尺寸（若無則空字串）","variants":["款式1","款式2"],"desc":"完整商品介紹文","reviews":["網友心得"],"image_urls":["圖片URL"]}
+variants 請列出所有顏色、口味、種類選項（每個為一個字串），若只有單一款式則回傳空陣列 []。`;
   try{
     setProgress(25,noSearch?'分析資訊中...':'搜尋商品資訊 + 網友心得...');
     const body={model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content:[...imgBlocks,{type:'text',text:prompt}]}]};
@@ -980,6 +986,8 @@ ${modeInstruction}
     if(parsed.country&&parsed.name)document.getElementById('prodName').value=`${parsed.country}・${parsed.name}`;
     else if(parsed.name)document.getElementById('prodName').value=parsed.name;
     if(parsed.volume)document.getElementById('prodVol').value=parsed.volume;
+    if(parsed.size)document.getElementById('prodSize').value=parsed.size;
+    if(parsed.variants&&parsed.variants.length>0)document.getElementById('prodVariants').value=parsed.variants.join('\n');
     if(parsed.desc){document.getElementById('prodDesc').value=parsed.desc;updateCharCount();}
     currentResult.reviews=parsed.reviews||[];
     currentResult.imageUrls=parsed.image_urls||[];
@@ -1022,7 +1030,8 @@ function buildPost(){
   const pf=(price.match(/^[𝙉𝙏NT\d]/)&&!price.startsWith('𝙉𝙏'))?`𝙉𝙏：${price}`:price;
   const titleLine=`${s.teamname}｜${name}`;
   const introBlock=`${pf}\n#${s.teamname}=>點此看本團所有商品\n${desc}`;
-  const specBlock=`【容量】${vol||'請補充'}\n【開團價】${pf}\n${s.mid}`;
+  const size=document.getElementById('prodSize').value.trim();
+  const specBlock=`【容量】${vol||'請補充'}${size?'\n【尺寸】'+size:''}\n【開團價】${pf}\n${s.mid}`;
   document.getElementById('rf-title').textContent=titleLine;
   document.getElementById('rf-intro').value=introBlock;
   document.getElementById('rf-spec').textContent=specBlock;
@@ -1072,7 +1081,7 @@ function renderReviews(reviews){
 }
 function clearListing(){
   imgs=[];currentResult={};refUrls=[];renderThumbs();renderUrlTags();
-  ['prodName','prodVol','prodPrice','prodDesc','supplierCopy','prodKeyword'].forEach(id=>document.getElementById(id).value='');
+  ['prodName','prodVol','prodSize','prodPrice','prodDesc','prodVariants','supplierCopy','prodKeyword'].forEach(id=>document.getElementById(id).value='');
   updateCharCount();
   document.getElementById('emptyState').style.display='flex';
   document.getElementById('resultPanel').style.display='none';
@@ -1092,7 +1101,9 @@ function showSendToOrderModal(){
   document.getElementById('sto-name').value=name;
   document.getElementById('sto-price').value=price;
   document.getElementById('sto-vendor').value='';
-  document.getElementById('sto-variants').value='';
+  // Auto-fill variants from AI-detected variants
+  const detectedVariants=document.getElementById('prodVariants').value.trim();
+  document.getElementById('sto-variants').value=detectedVariants;
   // Show first uploaded photo
   const photoWrap=document.getElementById('sto-photo-wrap');
   const photoEl=document.getElementById('sto-photo');
