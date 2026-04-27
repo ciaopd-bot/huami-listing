@@ -600,6 +600,7 @@ input.field-error::placeholder{color:#C9826B}
               <div class="thumb-grid" id="thumbGrid" style="display:none"></div>
               <input type="file" id="fi" accept="image/*" multiple style="display:none"/>
               <button onclick="openCropTool()" style="margin-top:6px;width:100%;padding:6px;border:1px dashed var(--rose-light);border-radius:7px;background:var(--petal);color:var(--rose-dark);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s">✂️ 廠商拼色圖裁切工具</button>
+              <button onclick="openGoogleLens()" style="margin-top:4px;width:100%;padding:6px;border:1px dashed var(--border);border-radius:7px;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s" title="以圖搜圖查市場售價">🔎 Google Lens 以圖搜圖查售價</button>
             </div>
 
             <div class="section">
@@ -707,7 +708,6 @@ input.field-error::placeholder{color:#C9826B}
             <div class="section" style="margin-top:-4px">
               <div style="display:flex;gap:6px;align-items:center">
                 <button id="marketPriceBtn" onclick="queryMarketPrice()" style="flex:1;padding:7px 10px;border:1px solid var(--blue-border);border-radius:8px;background:var(--blue-light);color:var(--blue);font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s">🔍 查市場售價</button>
-                <button onclick="openGoogleLens()" title="用 Google Lens 以圖搜圖" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s;white-space:nowrap">🔎 Google Lens</button>
               </div>
               <div id="marketPriceResult" style="display:none;margin-top:8px;padding:10px 12px;background:var(--white);border:1px solid var(--blue-border);border-radius:8px;font-size:12px;color:var(--ink);line-height:1.75"></div>
             </div>
@@ -2168,7 +2168,12 @@ function exportOrderImage(){
   const items=[];
   products.forEach(p=>{
     p.variants.forEach(v=>{
-      if(v.qty>0)items.push({name:p.name,variant:v.label,qty:v.qty,thumb:p.thumb||null});
+      if(v.qty>0){
+        // 用 photoIdx 找對應照片，找不到就用第一張
+        const photos = p.photos || (p.thumb ? [p.thumb] : []);
+        const thumb = photos[v.photoIdx] || photos[0] || p.thumb || null;
+        items.push({name:p.name,variant:v.label,qty:v.qty,thumb});
+      }
     });
   });
   if(!items.length){showToast('尚未填入數量');return;}
@@ -2285,7 +2290,7 @@ function finishExport(canvas){
 // ══════════════════════════════════════════════
 // COPY HELPERS
 // ══════════════════════════════════════════════
-async function sharePost(){
+function sharePost(){
   const text = getFullText();
   if(!text){showToast('請先產生上架文');return;}
 
@@ -2295,34 +2300,35 @@ async function sharePost(){
     return;
   }
 
-  // Try to share with first photo if available
-  if(imgs.length > 0 && navigator.canShare){
-    try{
-      // Convert base64 to File object
-      const b64 = imgs[0].b64;
-      const mimeType = imgs[0].type || 'image/jpeg';
-      const res = await fetch(b64);
-      const blob = await res.blob();
-      const file = new File([blob], 'product.jpg', {type: mimeType});
-      const shareData = {title:'huami 開團工具', text, files:[file]};
-      if(navigator.canShare(shareData)){
-        await navigator.share(shareData);
-        return;
+  // 嘗試帶第一張照片分享
+  const doShare = async () => {
+    if(imgs.length > 0){
+      try{
+        const b64 = imgs[0].b64;
+        const mimeType = b64.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+        const res = await fetch(b64);
+        const blob = await res.blob();
+        const file = new File([blob], 'product.jpg', {type: mimeType});
+        const shareData = {text, files:[file]};
+        if(navigator.canShare && navigator.canShare(shareData)){
+          await navigator.share(shareData);
+          return;
+        }
+      } catch(e){
+        console.log('照片分享失敗，改為純文字', e);
       }
+    }
+    // 純文字分享
+    try{
+      await navigator.share({text});
     } catch(e){
-      console.log('file share failed, fallback to text', e);
+      if(e.name !== 'AbortError'){
+        navigator.clipboard.writeText(text);
+        showToast('已複製全文');
+      }
     }
-  }
-
-  // Fallback: text only
-  try{
-    await navigator.share({title:'huami 開團工具', text});
-  } catch(e){
-    if(e.name !== 'AbortError'){
-      navigator.clipboard.writeText(text);
-      showToast('已複製全文');
-    }
-  }
+  };
+  doShare();
 }
 
 function copyField(id){navigator.clipboard.writeText(document.getElementById(id).textContent);showToast('已複製');}
