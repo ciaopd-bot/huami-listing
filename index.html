@@ -1318,7 +1318,7 @@ function loadSettings() {
   const savedCountry = localStorage.getItem('huakai_default_country') || 'KR';
   const cfgSel = document.getElementById('cfg-default-country');
   if (cfgSel) cfgSel.value = savedCountry;
-  try { products = JSON.parse(localStorage.getItem(getGroupProductsKey ? getGroupProductsKey() : PRODUCTS_KEY)||'[]'); } catch(e){}
+  // products 已在 boot 時讀取，這裡不重複讀
 }
 
 function getSettings() {
@@ -1621,8 +1621,9 @@ async function regenDesc(){
     document.getElementById('prodDesc').value=text;
         const _pv=document.getElementById("prodPrice").value.trim();const _pf=(_pv.match(/^[NT\d]/)?`𝙉𝙏：${_pv}`:_pv);document.getElementById("rf-intro").value=(_pf?`${_pf}\n`:"")+`#${s.teamname}=>點此看本團所有商品\n${text}`;
     updateCharCount();updateRfCharCount(document.getElementById('rf-intro').value);syncPreview();
+    buildPost(); // 重新組合完整上架文
     setStatus('文案已更新');showToast('介紹文已重新產生');
-  }catch(e){setStatus('就緒');showToast('重新產生失敗');}
+  }catch(e){setStatus('就緒');showToast('重新產生失敗：'+e.message);}
 }
 
 // ══════════════════════════════════════════════
@@ -2286,15 +2287,14 @@ function openModal(id){
   const el=document.getElementById(id);
   if(!el) return;
   el.classList.remove('hidden');
-  el.style.cssText = (el.style.cssText||'').replace(/display\s*:[^;]+;?/g,'');
+  el.removeAttribute('style'); // 清除所有 inline style
   el.style.display='flex';
 }
 function closeModal(id){
   const el=document.getElementById(id);
   if(!el) return;
   el.classList.add('hidden');
-  el.style.display='none';
-  el.style.setProperty('display','none','important');
+  el.removeAttribute('style'); // 清除 inline style，讓 .hidden{display:none} 生效
 }
 
 // ══════════════════════════════════════════════
@@ -2978,16 +2978,19 @@ async function queryMarketPrice() {
   const keyword = name || '此商品';
   const volHint = vol ? `（${vol}）` : '';
 
-  const prompt = `搜尋「${keyword} 台灣 代購 售價」和「${keyword} 蝦皮 價格」，整理出：台灣市場售價區間、我的定價${ourPrice}是否合理（一句話評估）。繁體中文，簡短。`;
+  const prompt = `你是台灣代購市場專家。商品：${keyword}${volHint}，我的定價：${ourPrice}。
+請根據你的知識，簡短回答：
+1. 此類商品在台灣代購/團購市場的常見售價區間
+2. 我的定價偏低/合理/偏高（一句話）
+繁體中文，50字內。`;
 
   try {
     const res = await fetch('https://huami-proxy.ciao-pd.workers.dev', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 250,
-        tools: [{type: 'web_search_20250305', name: 'web_search'}],
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
         messages: [{role: 'user', content: prompt}]
       })
     });
@@ -3160,7 +3163,9 @@ function deleteGroup(id) {
 // ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
-initGroups();
+initGroups(); // 必須最先，確保 getActiveGroupId() 正確
+// 讀取目前團的商品
+try { products = JSON.parse(localStorage.getItem(getGroupProductsKey())||'[]'); } catch(e){ products=[]; }
 loadSettings();
 loadHistory();
 renderStyleTab();
