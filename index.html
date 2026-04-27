@@ -1310,15 +1310,37 @@ async function runAI(){
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
   const keywordHint=keyword?`\n這個商品有以下名稱（不同語言的同一商品）：${keywordLines.map((k,i)=>`\n${i+1}. ${k}`).join('')}\n請以這些名稱搜尋並辨識商品，輸出一律用繁體中文。`:'';
+  // Detect if product is skincare/beauty
+  const supplierLower = supplierCopy.toLowerCase();
+  const isBeauty = /精華|面膜|乳液|保濕|美容|美妝|護膚|玻尿酸|胜肽|防曬|精油|化妝|粉底|口紅|眼影|serum|essence|toner|moistur|sunscreen|mask|cream|lotion|ampoule|化粧|美白|抗老|緊緻|毛孔|修護|屏障/.test(supplierLower + (keyword||''));
+
+  const beautyExtra = isBeauty ? `
+【這是保養品/美妝品，額外必須做到】
+- 搜尋並列出主要成分（至少2~3個），用口語說明每個成分的功效
+- 說明適合什麼膚況的人使用（乾性/油性/敏感肌/混合肌/所有膚質）
+- 描述使用後的具體感受（質地、吸收速度、氣味、使用後膚況）
+- 避免過度醫療宣稱，但可以說明成分功效` : '';
+
   const prompt=`你是「${s.teamname}」的上架文案小幫手。${keywordHint}${supplierSection}${urlSection}
-【必須執行，不可省略】:
-1. 分析照片中的商品
+【必須執行，不可省略】：
+1. 仔細分析照片中的商品外觀、包裝文字、品牌名稱
 2. ${searchInstruction}
+3. 根據搜尋結果確認商品的正確名稱、品牌、產地、規格，不可憑空猜測
+4. 如果搜尋結果與照片不符，以照片為準並說明差異
 ${modeInstruction}
+${beautyExtra}
+
+【desc 內容要求】
+- 必須根據實際搜尋到的資訊撰寫，不可編造不存在的口味、顏色或規格
+- 開頭帶出商品在當地的人氣或特色背景
+- 自然帶出使用情境（自用、送禮、日常、旅行等選一種）
+- 如有多個口味/款式，每款都要略提特色
+- 結尾可自然引導購買，非必要
+
 請以繁體中文回覆，格式為純 JSON，不要 markdown：
-{"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","size":"尺寸（若無則空字串）","weight_g":"商品重量克數（純數字，若能從圖片或資訊判斷則填入，無法判斷則填0）","variants":["款式1","款式2"],"desc":"完整商品介紹文","reviews":["網友心得"],"image_urls":["圖片URL"]}
-variants 請列出所有顏色、口味、種類選項（每個為一個字串），若只有單一款式則回傳空陣列 []。
-weight_g：請根據商品照片、包裝標示或同類商品常見重量推估，例如餅乾一包約50-200g、面膜一片約25g、T恤約200g，若完全無法判斷填0。`;
+{"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","size":"尺寸（若無則空字串）","weight_g":"商品重量克數（純數字，若能從圖片或資訊判斷則填入，無法判斷則填0）","variants":["款式1","款式2"],"desc":"完整商品介紹文（300-500字）","reviews":["網友心得"],"image_urls":["圖片URL"]}
+variants：列出所有顏色、口味、種類（每個為一個字串），若只有單一款式則回傳空陣列 []。
+weight_g：根據商品包裝標示或同類常見重量推估，無法判斷填0。`;
   try{
     setProgress(25,noSearch?'分析資訊中...':'搜尋商品資訊 + 網友心得...');
     const body={model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content:[...imgBlocks,{type:'text',text:prompt}]}]};
