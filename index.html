@@ -2242,13 +2242,15 @@ function openModal(id){
   const el=document.getElementById(id);
   if(!el) return;
   el.classList.remove('hidden');
-  el.style.display='flex'; // force show regardless of previous state
+  el.style.cssText = (el.style.cssText||'').replace(/display\s*:[^;]+;?/g,'');
+  el.style.display='flex';
 }
 function closeModal(id){
   const el=document.getElementById(id);
   if(!el) return;
   el.classList.add('hidden');
-  el.style.display='none'; // force hide
+  el.style.display='none';
+  el.style.setProperty('display','none','important');
 }
 
 // ══════════════════════════════════════════════
@@ -2928,23 +2930,7 @@ async function queryMarketPrice() {
   const keyword = name || '此商品';
   const volHint = vol ? `（${vol}）` : '';
 
-  const prompt = `你是台灣代購團購市場的定價顧問。請幫我搜尋以下商品目前在台灣市場的售價：
-
-商品：${keyword}${volHint}
-我的建議售價：${ourPrice}
-
-請執行以下搜尋：
-1. 搜尋「${keyword} 台灣 代購 售價」或「${keyword} 台灣 多少錢」
-2. 搜尋「${keyword} 蝦皮」或「${keyword} pchome 價格」
-3. 搜尋台灣 FB 社團或 IG 團購的售價
-
-請整理出：
-- 台灣市場目前售價區間（最低～最高）
-- 常見的代購/團購售價落點
-- 我的定價（${ourPrice}）在市場中的位置評估（偏低/合理/偏高）
-- 簡短的定價建議（1~2句話）
-
-請用繁體中文回答，格式簡潔，不要太長。`;
+  const prompt = `搜尋「${keyword} 台灣 代購 售價」和「${keyword} 蝦皮 價格」，整理出：台灣市場售價區間、我的定價${ourPrice}是否合理（一句話評估）。繁體中文，簡短。`;
 
   try {
     const res = await fetch('https://huami-proxy.ciao-pd.workers.dev', {
@@ -2952,7 +2938,7 @@ async function queryMarketPrice() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 600,
+        max_tokens: 250,
         tools: [{type: 'web_search_20250305', name: 'web_search'}],
         messages: [{role: 'user', content: prompt}]
       })
