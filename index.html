@@ -639,9 +639,11 @@ input.field-error::placeholder{color:#C9826B}
                     <div class="calc-result-main" id="calcRetail"></div>
                   </div>
                   <div class="calc-result-detail" id="calcResultDetail"></div>
-                  <div style="margin-top:8px">
+                  <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
                     <button style="font-size:12px;padding:5px 14px;border:1px solid var(--rose-light);border-radius:6px;background:var(--petal);color:var(--rose-dark);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('retail')">套用此售價 →</button>
+                    <button id="marketPriceBtn" style="font-size:12px;padding:5px 14px;border:1px solid var(--blue-border);border-radius:6px;background:var(--blue-light);color:var(--blue);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="queryMarketPrice()">🔍 查市場售價</button>
                   </div>
+                  <div id="marketPriceResult" style="display:none;margin-top:10px;padding:10px 12px;background:var(--cream);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--ink);line-height:1.7"></div>
                 </div>
               </div>
             </div>
@@ -1034,7 +1036,7 @@ let isAdmin = false;
 const STYLE_PROMPT = `
 【文字風格規則，必須嚴格遵守】
 1. 語氣像朋友真心推薦，不像官方廣告，要讓人覺得你自己試過、有感覺。
-2. 開頭用生活情境或有畫面感的話吸引注意，或舉例這個商品在國外流行的現象或文化背景。
+2. 開頭可用：生活情境、商品在當地的人氣現象、品牌背景或獲獎（前提是搜尋有找到實際資料才能寫，沒有就不要編）。選最自然的角度切入，不一定要有品牌故事。
 3. 文字帶一點幽默與生活感，但不浮誇、不過度驚嘆。
 4. 商品特色自然帶出，不要生硬條列，要融進敘述中。
 5. 幫客人想使用情境（自用、送禮、日常、旅行等），選最貼切的自然帶入一種。
@@ -1049,12 +1051,34 @@ const STYLE_PROMPT = `
 若商品含成分資訊：挑出 1～3 個關鍵成分；用口語解釋功效；成分說明融入內文；加一句適合什麼膚況的人用；避免過度醫療或誇大說法。
 `;
 
-function getStyleExamplesBlock() {
+function getStyleExamplesBlock(productName) {
   if (!styleSamples.length) return '';
-  const recent = styleSamples.slice(-5);
-  return '\n\n【主人的文風範例，請模仿語氣、句型和用字】\n' +
-    recent.map((s,i)=>`範例${i+1}${s.tag?`（${s.tag}）`:''}\n${s.text.slice(0,300)}${s.text.length>300?'...':''}`).join('\n\n') +
-    '\n【範例結束，依此風格寫新文案】\n';
+  // Try to find tag-matching samples first
+  const name = (productName||'').toLowerCase();
+  const tagMap = {
+    '食品':'食品', '零食':'食品', '餅乾':'食品', '海苔':'食品', '巧克力':'食品', '糖果':'食品', '飲料':'食品', '泡麵':'食品',
+    '保養':'保養品', '護膚':'保養品', '精華':'保養品', '面膜':'保養品', '乳液':'保養品', '防曬':'保養品',
+    '彩妝':'美妝', '口紅':'美妝', '粉底':'美妝', '眼影':'美妝',
+    '服飾':'服飾', '衣':'服飾', '褲':'服飾', '裙':'服飾', '包包':'服飾',
+    '清潔':'清潔', '洗臉':'清潔', '洗髮':'清潔'
+  };
+  let matchTag = '';
+  for (const [kw, tag] of Object.entries(tagMap)) {
+    if (name.includes(kw)) { matchTag = tag; break; }
+  }
+  // Pick: tag-matching first, then recent, combine up to 3
+  let picked = [];
+  if (matchTag) {
+    const tagged = styleSamples.filter(s=>s.tag&&s.tag.includes(matchTag));
+    picked = tagged.slice(-2);
+  }
+  if (picked.length < 3) {
+    const rest = styleSamples.filter(s=>!picked.includes(s));
+    picked = [...picked, ...rest.slice(-( 3 - picked.length))];
+  }
+  if (!picked.length) return '';
+  return '\n【文風範例（請模仿語氣）】\n' +
+    picked.map(s=>`${s.tag?`[${s.tag}]`:''} ${s.text.slice(0,150)}...`).join('\n') + '\n';
 }
 
 // ══════════════════════════════════════════════
@@ -1470,20 +1494,15 @@ async function runAI(){
   const keywordLines=keywordRaw?keywordRaw.split('\n').map(k=>k.trim()).filter(Boolean):[];
   const keyword=keywordLines.join('、');
   const searchKw=keyword||'此商品';
-  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`你必須實際使用 web_search 工具搜尋，不可只憑照片猜測。請依序：1)搜尋商品名稱品牌產地（中文+原文） 2)搜尋「${searchKw} 評價 心得」找台灣網友感受 3)若有參考網址請抓取內容 4)搜尋商品圖片URL（3~6個）。將搜尋結果整合進描述。`;
+  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`你必須實際使用 web_search 工具搜尋，不可只憑照片猜測。請依序：1)搜尋商品名稱品牌產地（中文+原文） 2)搜尋品牌歷史、創立背景、獲獎紀錄、在當地的人氣或知名度 3)搜尋「${searchKw} 評價 心得」找台灣網友感受 4)若有參考網址請抓取內容 5)搜尋商品圖片URL（3~6個）。將搜尋結果整合進描述，品牌故事或獲獎資訊若有找到請自然融入文案。`;
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
-  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
+  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock(keyword||document.getElementById('prodName')?.value||'').slice(0,600)}`;
   const keywordHint=keyword?`\n這個商品有以下名稱（不同語言的同一商品）：${keywordLines.map((k,i)=>`\n${i+1}. ${k}`).join('')}\n請以這些名稱搜尋並辨識商品，輸出一律用繁體中文。`:'';
   // Detect if product is skincare/beauty
   const supplierLower = supplierCopy.toLowerCase();
   const isBeauty = /精華|面膜|乳液|保濕|美容|美妝|護膚|玻尿酸|胜肽|防曬|精油|化妝|粉底|口紅|眼影|serum|essence|toner|moistur|sunscreen|mask|cream|lotion|ampoule|化粧|美白|抗老|緊緻|毛孔|修護|屏障/.test(supplierLower + (keyword||''));
 
-  const beautyExtra = isBeauty ? `
-【這是保養品/美妝品，額外必須做到】
-- 搜尋並列出主要成分（至少2~3個），用口語說明每個成分的功效
-- 說明適合什麼膚況的人使用（乾性/油性/敏感肌/混合肌/所有膚質）
-- 描述使用後的具體感受（質地、吸收速度、氣味、使用後膚況）
-- 避免過度醫療宣稱，但可以說明成分功效` : '';
+  const beautyExtra = isBeauty ? '\n【保養/美妝品：需搜尋主要成分(2~3個)並口語說明功效、適合膚質、使用感受】' : '';
 
   const prompt=`你是「${s.teamname}」的上架文案小幫手。${keywordHint}${supplierSection}${urlSection}
 【必須執行，不可省略】：
@@ -1494,12 +1513,7 @@ async function runAI(){
 ${modeInstruction}
 ${beautyExtra}
 
-【desc 內容要求】
-- 必須根據實際搜尋到的資訊撰寫，不可編造不存在的口味、顏色或規格
-- 開頭帶出商品在當地的人氣或特色背景
-- 自然帶出使用情境（自用、送禮、日常、旅行等選一種）
-- 如有多個口味/款式，每款都要略提特色
-- 結尾可自然引導購買，非必要
+【desc要求】根據搜尋結果撰寫，不可編造，300-500字，口語化，帶出使用情境。若搜尋中有找到品牌背景、獲獎、排隊名店、媒體報導等資訊，可自然融入；若沒有找到則不必硬加，不要憑空編造
 
 請以繁體中文回覆，格式為純 JSON，不要 markdown：
 {"country":"產地國家","name":"品牌+商品名稱（不含產地）","volume":"容量或規格","size":"尺寸（若無則空字串）","weight_g":"商品重量克數（純數字，若能從圖片或資訊判斷則填入，無法判斷則填0）","variants":["款式1","款式2"],"desc":"完整商品介紹文（300-500字）","reviews":["網友心得"],"image_urls":["圖片URL"]}
@@ -1546,7 +1560,7 @@ async function regenDesc(){
   const supplierCopy=document.getElementById('supplierCopy').value.trim();
   const s=getSettings();
   setStatus('重新產生文案...',true);
-  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock()}`;
+  const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock(document.getElementById('prodName')?.value||'')}`;
   const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n請只輸出商品介紹文本身，不要 JSON 或標題。`;
   try{
     const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
@@ -2880,6 +2894,79 @@ function nextProduct(){
   document.querySelector('.sidebar-body').scrollTop=0;
   document.querySelector('.main-area').scrollTop=0;
   showToast('已清空，可開始下一個商品');
+}
+
+// ══════════════════════════════════════════════
+// MARKET PRICE QUERY
+// ══════════════════════════════════════════════
+async function queryMarketPrice() {
+  const name = document.getElementById('prodName')?.value.trim() ||
+               document.getElementById('prodKeyword')?.value.trim().split('\n')[0] || '';
+  const vol = document.getElementById('prodVol')?.value.trim() || '';
+
+  if (!name && !window._lastCalc) {
+    showToast('請先填入商品名稱或計算售價');
+    return;
+  }
+
+  const btn = document.getElementById('marketPriceBtn');
+  const result = document.getElementById('marketPriceResult');
+  if (!btn || !result) return;
+
+  btn.textContent = '🔍 搜尋中...';
+  btn.disabled = true;
+  result.style.display = 'none';
+
+  const ourPrice = window._lastCalc ? `NT ${window._lastCalc.retail}` : '未計算';
+  const keyword = name || '此商品';
+  const volHint = vol ? `（${vol}）` : '';
+
+  const prompt = `你是台灣代購團購市場的定價顧問。請幫我搜尋以下商品目前在台灣市場的售價：
+
+商品：${keyword}${volHint}
+我的建議售價：${ourPrice}
+
+請執行以下搜尋：
+1. 搜尋「${keyword} 台灣 代購 售價」或「${keyword} 台灣 多少錢」
+2. 搜尋「${keyword} 蝦皮」或「${keyword} pchome 價格」
+3. 搜尋台灣 FB 社團或 IG 團購的售價
+
+請整理出：
+- 台灣市場目前售價區間（最低～最高）
+- 常見的代購/團購售價落點
+- 我的定價（${ourPrice}）在市場中的位置評估（偏低/合理/偏高）
+- 簡短的定價建議（1~2句話）
+
+請用繁體中文回答，格式簡潔，不要太長。`;
+
+  try {
+    const res = await fetch('https://huami-proxy.ciao-pd.workers.dev', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 600,
+        tools: [{type: 'web_search_20250305', name: 'web_search'}],
+        messages: [{role: 'user', content: prompt}]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = (data.content||[]).filter(b=>b&&b.type==='text').map(b=>b.text).join('').trim();
+    if (text) {
+      result.innerHTML = '<div style="font-size:11px;font-weight:500;color:var(--blue);margin-bottom:6px;letter-spacing:0.04em">🔍 市場售價參考</div>' +
+        text.replace(/\n/g, '<br>');
+      result.style.display = 'block';
+    } else {
+      showToast('查詢無結果，請稍後再試');
+    }
+  } catch(e) {
+    showToast('市場查價失敗：' + (e.message||'未知錯誤'));
+    console.error(e);
+  }
+
+  btn.textContent = '🔍 查市場售價';
+  btn.disabled = false;
 }
 
 // ══════════════════════════════════════════════
