@@ -432,21 +432,36 @@ input.field-error::placeholder{color:#C9826B}
   window.addEventListener('load', () => {
     setTimeout(() => {
       // Products sync - group-scoped
+      let _unsubscribeProducts = null;
       function setupProductsSync() {
         const groupId = typeof getActiveGroupId === 'function' ? getActiveGroupId() : 'default';
         const fbKey = 'products_' + groupId;
         const localKey = 'huakai_v4_products_' + groupId;
-        listenRemote(fbKey, localKey, (data) => {
-          if (Array.isArray(data)) {
-            window.products = data;
+        // Unsubscribe previous listener if exists
+        if (_unsubscribeProducts) { try { _unsubscribeProducts(); } catch(e){} }
+        _unsubscribeProducts = onSnapshot(doc(db, 'huami', fbKey), (snap) => {
+          if (!snap.exists()) return;
+          const remote = snap.data();
+          if (remote.deviceId === DEVICE_ID) return;
+          try {
+            const parsed = JSON.parse(remote.data);
+            localStorage.setItem(localKey, JSON.stringify(parsed));
+            window.products = parsed;
             if (typeof renderProducts === 'function') renderProducts();
             if (typeof renderOrderSummary === 'function') renderOrderSummary();
-            console.log('Firebase: products synced from remote, group:', groupId);
-          }
+            console.log('Firebase: products received, group:', groupId, 'count:', parsed.length);
+          } catch(e) { console.warn('products sync parse error', e); }
         });
+        console.log('Firebase: listening to products for group:', groupId);
       }
       setupProductsSync();
+      // Expose so switchGroup can call it
       window._setupProductsSync = setupProductsSync;
+      // Also expose throttledPush for products
+      window._fbPushProducts = (data) => {
+        const groupId = typeof getActiveGroupId === 'function' ? getActiveGroupId() : 'default';
+        throttledPush('products_' + groupId, data);
+      };
 
       // Settings sync
       listenRemote('settings', 'huakai_v4_settings', (data) => {
@@ -1723,7 +1738,7 @@ function confirmSendToOrder(){
   };
   products.push(product);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
   // Flash the add button green to confirm
@@ -1814,7 +1829,7 @@ function confirmAddProduct(){
   apPhotos = [];
   products.push(product);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
 }
 
@@ -1905,7 +1920,7 @@ function toggleVariant(pi,vi,checked){
   products[pi].variants[vi].checked = checked;
   if(!checked) products[pi].variants[vi].qty = 0;
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   // Update row style
   const row=document.getElementById(`vrow-${pi}-${vi}`);
   if(row){
@@ -1922,7 +1937,7 @@ function changeQty(pi,vi,delta){
   if(products[pi].variants[vi].checked===false)return;
   products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   const el=document.getElementById(`qty-${pi}-${vi}`);
   if(el){el.textContent=products[pi].variants[vi].qty;el.className='qty-display'+(products[pi].variants[vi].qty>0?' has-qty':'');}
   renderOrderSummary();
@@ -1931,7 +1946,7 @@ function changeQty(pi,vi,delta){
 function removeProduct(pi){
   products.splice(pi,1);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();
 }
 
@@ -1946,7 +1961,7 @@ function confirmBatch(){
   }));
   if(!total){showToast('尚未填入任何數量');return;}
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();
   showToast(`已確認 ${total} 件，已加入累計數量`);
 }
@@ -1982,7 +1997,7 @@ function clearAllOrders(){
   if(!confirm('清空本次數量？（累計已訂不受影響）')) return;
   products.forEach(p=>p.variants.forEach(v=>v.qty=0));
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();showToast('已清空本次數量');
 }
 
@@ -1990,7 +2005,7 @@ function resetAllTotals(){
   if(!confirm('確定要清空所有累計已訂數量嗎？')) return;
   products.forEach(p=>p.variants.forEach(v=>{v.totalOrdered=0;v.qty=0;}));
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();showToast('已清空所有累計數量');
 }
 
