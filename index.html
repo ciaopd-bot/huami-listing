@@ -392,10 +392,15 @@ input.field-error::placeholder{color:#C9826B}
   // ── Sync functions ──
   const SYNC_THROTTLE = 2000; // ms
   let syncTimers = {};
+  // Unique device ID to distinguish self vs remote pushes
+  const DEVICE_ID = Math.random().toString(36).slice(2);
+  const recentPushes = {}; // key -> timestamp of last push by this device
 
   async function pushToFirebase(key, data) {
     try {
-      await setDoc(doc(db, 'huami', key), { data: JSON.stringify(data), updatedAt: Date.now() });
+      recentPushes[key] = Date.now();
+      await setDoc(doc(db, 'huami', key), { data: JSON.stringify(data), updatedAt: Date.now(), deviceId: DEVICE_ID });
+      console.log('Firebase: pushed', key);
     } catch(e) { console.warn('Firebase push failed:', e.message); }
   }
 
@@ -409,12 +414,13 @@ input.field-error::placeholder{color:#C9826B}
     onSnapshot(doc(db, 'huami', key), (snap) => {
       if (!snap.exists()) return;
       const remote = snap.data();
-      // Skip if this device just pushed (within 3s)
-      if (Date.now() - (remote.updatedAt||0) < 3000) return;
+      // Skip if this device was the one who pushed this update
+      if (remote.deviceId === DEVICE_ID) return;
       try {
         const parsed = JSON.parse(remote.data);
         localStorage.setItem(localKey, JSON.stringify(parsed));
         if (onUpdate) onUpdate(parsed);
+        console.log('Firebase: received update for', key);
       } catch(e) {}
     });
   }
@@ -477,6 +483,13 @@ input.field-error::placeholder{color:#C9826B}
       <div class="nav-tab active" onclick="switchPage('listing')">上架文產生</div>
       <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
       <div class="nav-tab" onclick="switchPage('history')">歷史紀錄</div>
+    </div>
+    <div style="display:flex;align-items:center;margin:0 12px;flex-shrink:0">
+      <div id="groupSelector" onclick="openGroupModal()" style="display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--white);font-size:12px;color:var(--ink-mid);white-space:nowrap;transition:all 0.15s" title="切換團">
+        <span style="color:var(--rose)">🗂</span>
+        <span id="currentGroupName">載入中...</span>
+        <span style="color:var(--ink-light);font-size:10px">▼</span>
+      </div>
     </div>
     <div class="nav-right"><span id="syncDot" title="雲端同步狀態" style="font-size:10px;color:var(--ink-light);margin-right:4px">☁️</span>
       <button class="admin-btn" id="adminToggleBtn" onclick="toggleAdminMode()">🔒 管理員模式</button>
@@ -947,6 +960,39 @@ EX：+1
 <canvas id="orderCanvas"></canvas>
 <div class="toast" id="toast"></div>
 
+<!-- ── Group Manager Modal ── -->
+<div class="modal-overlay hidden" id="groupModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🗂 團管理</div>
+    <div class="modal-sub">每個團有各自的訂貨清單和歷史紀錄</div>
+
+    <!-- Current active group -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:500;color:var(--ink-light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">目前使用中</div>
+      <div id="activeGroupDisplay" style="padding:8px 12px;background:var(--petal);border:1px solid var(--rose-light);border-radius:8px;font-size:13px;font-weight:500;color:var(--rose-dark)"></div>
+    </div>
+
+    <!-- Group list -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:500;color:var(--ink-light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">所有團</div>
+      <div id="groupList" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+
+    <!-- Add new group -->
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:4px">
+      <div style="font-size:11px;font-weight:500;color:var(--ink-light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">新增團</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="newGroupInput" placeholder="例：五月團、日本旅行開團" style="flex:1;font-size:13px" onkeydown="if(event.key==='Enter')addGroup()"/>
+        <button class="btn btn-rose btn-sm" onclick="addGroup()" style="white-space:nowrap">新增</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('groupModal')">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -1175,7 +1221,7 @@ function loadSettings() {
   const savedCountry = localStorage.getItem('huakai_default_country') || 'KR';
   const cfgSel = document.getElementById('cfg-default-country');
   if (cfgSel) cfgSel.value = savedCountry;
-  try { products = JSON.parse(localStorage.getItem(PRODUCTS_KEY)||'[]'); } catch(e){}
+  try { products = JSON.parse(localStorage.getItem(getGroupProductsKey ? getGroupProductsKey() : PRODUCTS_KEY)||'[]'); } catch(e){}
 }
 
 function getSettings() {
@@ -1669,7 +1715,7 @@ function confirmSendToOrder(){
     variants:variants.map((v,vi)=>({label:v,qty:0,checked:true,totalOrdered:0,photoIdx:vi}))
   };
   products.push(product);
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
@@ -1760,7 +1806,7 @@ function confirmAddProduct(){
   };
   apPhotos = [];
   products.push(product);
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
 }
@@ -1844,14 +1890,14 @@ function toggleProduct(pi, checked){
     const el = document.getElementById(`qty-${pi}-${vi}`);
     if(el){ el.textContent=0; el.className='qty-display'; }
   });
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(), JSON.stringify(products));
   renderOrderSummary();
 }
 
 function toggleVariant(pi,vi,checked){
   products[pi].variants[vi].checked = checked;
   if(!checked) products[pi].variants[vi].qty = 0;
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   // Update row style
   const row=document.getElementById(`vrow-${pi}-${vi}`);
@@ -1868,7 +1914,7 @@ function toggleVariant(pi,vi,checked){
 function changeQty(pi,vi,delta){
   if(products[pi].variants[vi].checked===false)return;
   products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   const el=document.getElementById(`qty-${pi}-${vi}`);
   if(el){el.textContent=products[pi].variants[vi].qty;el.className='qty-display'+(products[pi].variants[vi].qty>0?' has-qty':'');}
@@ -1877,7 +1923,7 @@ function changeQty(pi,vi,delta){
 
 function removeProduct(pi){
   products.splice(pi,1);
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();
 }
@@ -1892,7 +1938,7 @@ function confirmBatch(){
     }
   }));
   if(!total){showToast('尚未填入任何數量');return;}
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();
   showToast(`已確認 ${total} 件，已加入累計數量`);
@@ -1919,7 +1965,7 @@ function deleteSelectedProducts(){
   if(!confirm(`確定要刪除選取的 ${selectedProductIndices.size} 個商品嗎？`)) return;
   products = products.filter((_,i) => !selectedProductIndices.has(i));
   selectedProductIndices = new Set();
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(), JSON.stringify(products));
   document.getElementById('selectAllBtn').textContent = '☑ 全選';
   renderProducts(); renderOrderSummary();
   showToast('已刪除選取的商品');
@@ -1928,7 +1974,7 @@ function deleteSelectedProducts(){
 function clearAllOrders(){
   if(!confirm('清空本次數量？（累計已訂不受影響）')) return;
   products.forEach(p=>p.variants.forEach(v=>v.qty=0));
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();showToast('已清空本次數量');
 }
@@ -1936,7 +1982,7 @@ function clearAllOrders(){
 function resetAllTotals(){
   if(!confirm('確定要清空所有累計已訂數量嗎？')) return;
   products.forEach(p=>p.variants.forEach(v=>{v.totalOrdered=0;v.qty=0;}));
-  localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
     if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();showToast('已清空所有累計數量');
 }
@@ -2621,7 +2667,7 @@ const HISTORY_KEY = 'huakai_v4_history';
 let historyItems = [];
 
 function loadHistory() {
-  try { historyItems = JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); } catch(e){ historyItems=[]; }
+  try { historyItems = JSON.parse(localStorage.getItem(getGroupHistoryKey ? getGroupHistoryKey() : HISTORY_KEY)||'[]'); } catch(e){ historyItems=[]; }
 }
 
 function saveToHistory(name, price, fullText, thumb) {
@@ -2636,7 +2682,7 @@ function saveToHistory(name, price, fullText, thumb) {
   };
   historyItems.unshift(item);
   if (historyItems.length > 50) historyItems = historyItems.slice(0,50);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(historyItems));
+  localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyItems));
 }
 
 function renderHistory() {
@@ -2783,7 +2829,7 @@ function deleteHistory(id) {
 function clearAllHistory() {
   if (!confirm('確定要清空所有歷史紀錄嗎？')) return;
   historyItems = [];
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(historyItems));
+  localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyItems));
   renderHistory();
   showToast('已清空歷史紀錄');
 }
@@ -2815,8 +2861,150 @@ function nextProduct(){
 }
 
 // ══════════════════════════════════════════════
+// GROUP MANAGEMENT
+// ══════════════════════════════════════════════
+const GROUPS_KEY = 'huakai_groups';
+const ACTIVE_GROUP_KEY = 'huakai_active_group';
+
+function getGroups() {
+  try { return JSON.parse(localStorage.getItem(GROUPS_KEY)||'[]'); } catch(e) { return []; }
+}
+
+function getActiveGroupId() {
+  return localStorage.getItem(ACTIVE_GROUP_KEY) || 'default';
+}
+
+function getActiveGroup() {
+  const groups = getGroups();
+  const id = getActiveGroupId();
+  return groups.find(g=>g.id===id) || {id:'default', name:'預設團', status:'active', createdAt: Date.now()};
+}
+
+function initGroups() {
+  let groups = getGroups();
+  if (!groups.length) {
+    // Create default group
+    groups = [{id:'default', name:'預設團', status:'active', createdAt: Date.now()}];
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  }
+  if (!localStorage.getItem(ACTIVE_GROUP_KEY)) {
+    localStorage.setItem(ACTIVE_GROUP_KEY, groups[0].id);
+  }
+  updateGroupDisplay();
+}
+
+function updateGroupDisplay() {
+  const g = getActiveGroup();
+  const el = document.getElementById('currentGroupName');
+  if (el) el.textContent = g.name;
+}
+
+// Override storage keys to be group-scoped
+function getGroupProductsKey() { return `huakai_v4_products_${getActiveGroupId()}`; }
+function getGroupHistoryKey() { return `huakai_v4_history_${getActiveGroupId()}`; }
+
+function openGroupModal() {
+  renderGroupList();
+  const g = getActiveGroup();
+  const el = document.getElementById('activeGroupDisplay');
+  if (el) el.textContent = g.name + (g.status==='archived' ? '（已封存）' : '');
+  openModal('groupModal');
+}
+
+function renderGroupList() {
+  const groups = getGroups();
+  const activeId = getActiveGroupId();
+  const container = document.getElementById('groupList');
+  if (!container) return;
+
+  if (!groups.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--ink-light);text-align:center;padding:8px">尚無團</div>';
+    return;
+  }
+
+  container.innerHTML = groups.map(g => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid ${g.id===activeId?'var(--rose-light)':'var(--border)'};background:${g.id===activeId?'var(--petal)':'var(--white)'};transition:all 0.15s">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:${g.id===activeId?'500':'400'};color:${g.id===activeId?'var(--rose-dark)':'var(--ink)'}">
+          ${g.name}
+          ${g.status==='archived'?'<span style="font-size:10px;color:var(--ink-light);margin-left:4px">已封存</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--ink-light);margin-top:1px">${new Date(g.createdAt).toLocaleDateString('zh-TW')}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${g.id!==activeId ? `<button onclick="switchGroup('${g.id}')" style="padding:3px 8px;border:1px solid var(--rose-light);border-radius:5px;background:var(--petal);color:var(--rose-dark);font-size:11px;cursor:pointer;font-family:'Noto Sans TC',sans-serif">切換</button>` : ''}
+        ${g.status!=='archived' ? `<button onclick="archiveGroup('${g.id}')" style="padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--white);color:var(--ink-light);font-size:11px;cursor:pointer;font-family:'Noto Sans TC',sans-serif">封存</button>` : ''}
+        ${g.id!=='default' ? `<button onclick="deleteGroup('${g.id}')" style="padding:3px 8px;border:1px solid var(--red-border);border-radius:5px;background:var(--white);color:var(--red);font-size:11px;cursor:pointer;font-family:'Noto Sans TC',sans-serif">刪除</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function addGroup() {
+  const input = document.getElementById('newGroupInput');
+  const name = input?.value.trim();
+  if (!name) { showToast('請輸入團名'); return; }
+  const groups = getGroups();
+  const newGroup = {id: 'g_' + Date.now(), name, status:'active', createdAt: Date.now()};
+  groups.push(newGroup);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  if (input) input.value = '';
+  renderGroupList();
+  showToast(`「${name}」已建立`);
+}
+
+function switchGroup(id) {
+  localStorage.setItem(ACTIVE_GROUP_KEY, id);
+  // Reload products and history for this group
+  try { products = JSON.parse(localStorage.getItem(getGroupProductsKey())||'[]'); } catch(e) { products=[]; }
+  updateGroupDisplay();
+  renderGroupList();
+  const g = getActiveGroup();
+  const el = document.getElementById('activeGroupDisplay');
+  if (el) el.textContent = g.name;
+  // Re-render current page
+  if (document.getElementById('page-order')?.classList.contains('active')) { renderProducts(); renderOrderSummary(); }
+  if (document.getElementById('page-history')?.classList.contains('active')) renderHistory();
+  showToast(`已切換到「${g.name}」`);
+}
+
+function archiveGroup(id) {
+  const groups = getGroups();
+  const g = groups.find(x=>x.id===id);
+  if (!g) return;
+  if (!confirm(`確定要封存「${g.name}」嗎？封存後資料保留但不再使用。`)) return;
+  g.status = 'archived';
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  // If archiving active group, switch to first active
+  if (getActiveGroupId()===id) {
+    const active = groups.find(x=>x.status==='active');
+    if (active) switchGroup(active.id);
+  }
+  renderGroupList();
+  showToast(`「${g.name}」已封存`);
+}
+
+function deleteGroup(id) {
+  const groups = getGroups();
+  const g = groups.find(x=>x.id===id);
+  if (!g || id==='default') return;
+  if (!confirm(`確定要刪除「${g.name}」嗎？此操作無法復原，該團的訂貨和歷史記錄都會消失。`)) return;
+  // Delete group data
+  localStorage.removeItem(`huakai_v4_products_${id}`);
+  localStorage.removeItem(`huakai_v4_history_${id}`);
+  const newGroups = groups.filter(x=>x.id!==id);
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(newGroups));
+  if (getActiveGroupId()===id) {
+    const active = newGroups.find(x=>x.status==='active') || newGroups[0];
+    if (active) switchGroup(active.id);
+  }
+  renderGroupList();
+  showToast(`「${g.name}」已刪除`);
+}
+
+// ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
+initGroups();
 loadSettings();
 loadHistory();
 renderStyleTab();
