@@ -484,6 +484,42 @@ input.field-error::placeholder{color:#C9826B}
         }
       });
 
+      // Groups sync - 團清單同步（新增/封存/刪除）
+      listenRemote('groups', 'huakai_groups', (data) => {
+        if (Array.isArray(data)) {
+          localStorage.setItem('huakai_groups', JSON.stringify(data));
+          if (typeof updateGroupDisplay === 'function') updateGroupDisplay();
+          // 如果目前的 active group 已被刪除，切換到第一個存在的團
+          const activeId = localStorage.getItem('huakai_active_group') || 'default';
+          const exists = data.find(g => g.id === activeId);
+          if (!exists && data.length > 0) {
+            localStorage.setItem('huakai_active_group', data[0].id);
+            if (typeof updateGroupDisplay === 'function') updateGroupDisplay();
+          }
+          console.log('Firebase: groups synced, count:', data.length);
+        }
+      });
+
+      // History sync - 依目前的團同步歷史紀錄
+      function setupHistorySync() {
+        const groupId = typeof getActiveGroupId === 'function' ? getActiveGroupId() : 'default';
+        const fbKey = 'history_' + groupId;
+        const localKey = 'huakai_v4_history_' + groupId;
+        listenRemote(fbKey, localKey, (data) => {
+          if (Array.isArray(data)) {
+            localStorage.setItem(localKey, JSON.stringify(data));
+            if (typeof historyItems !== 'undefined') window.historyItems = data;
+            // 如果目前在歷史紀錄頁面，重新渲染
+            if (document.getElementById('page-history')?.classList.contains('active')) {
+              if (typeof renderHistory === 'function') renderHistory();
+            }
+            console.log('Firebase: history synced, group:', groupId, 'count:', data.length);
+          }
+        });
+      }
+      setupHistorySync();
+      window._setupHistorySync = setupHistorySync;
+
       // Style library sync - all devices get the same style samples
       listenRemote('styleSamples', 'huakai_v4_style', (data) => {
         if (Array.isArray(data)) {
@@ -2736,6 +2772,10 @@ function saveToHistory(name, price, fullText, thumb) {
   historyItems.unshift(item);
   if (historyItems.length > 50) historyItems = historyItems.slice(0,50);
   localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyItems));
+  if (window._fb) {
+    const _hgid = typeof getActiveGroupId==='function'?getActiveGroupId():'default';
+    window._fb.throttledPush('history_'+_hgid, historyItems);
+  }
 }
 
 function renderHistory() {
@@ -3057,6 +3097,7 @@ function addGroup() {
   const newGroup = {id: 'g_' + Date.now(), name, status:'active', createdAt: Date.now()};
   groups.push(newGroup);
   localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  if (window._fb) window._fb.throttledPush('groups', groups);
   if (input) input.value = '';
   renderGroupList();
   showToast(`「${name}」已建立`);
@@ -3073,6 +3114,7 @@ function switchGroup(id) {
   if (el) el.textContent = g.name;
   // Re-setup Firebase listener for new group
   if (window._setupProductsSync) window._setupProductsSync();
+  if (window._setupHistorySync) window._setupHistorySync();
   // Re-render current page
   if (document.getElementById('page-order')?.classList.contains('active')) { renderProducts(); renderOrderSummary(); }
   if (document.getElementById('page-history')?.classList.contains('active')) renderHistory();
@@ -3086,6 +3128,7 @@ function archiveGroup(id) {
   if (!confirm(`確定要封存「${g.name}」嗎？封存後資料保留但不再使用。`)) return;
   g.status = 'archived';
   localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  if (window._fb) window._fb.throttledPush('groups', groups);
   // If archiving active group, switch to first active
   if (getActiveGroupId()===id) {
     const active = groups.find(x=>x.status==='active');
@@ -3105,6 +3148,7 @@ function deleteGroup(id) {
   localStorage.removeItem(`huakai_v4_history_${id}`);
   const newGroups = groups.filter(x=>x.id!==id);
   localStorage.setItem(GROUPS_KEY, JSON.stringify(newGroups));
+  if (window._fb) window._fb.throttledPush('groups', newGroups);
   if (getActiveGroupId()===id) {
     const active = newGroups.find(x=>x.status==='active') || newGroups[0];
     if (active) switchGroup(active.id);
