@@ -392,15 +392,21 @@ input.field-error::placeholder{color:#C9826B}
   // ── Sync functions ──
   const SYNC_THROTTLE = 2000; // ms
   let syncTimers = {};
-  // Unique device ID to distinguish self vs remote pushes
-  const DEVICE_ID = Math.random().toString(36).slice(2);
-  const recentPushes = {}; // key -> timestamp of last push by this device
+  // Unique device ID - persists within same tab session, different across tabs/browsers
+  const DEVICE_ID = sessionStorage.getItem('_huami_device_id') || (() => {
+    const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem('_huami_device_id', id);
+    return id;
+  })();
+  console.log('Firebase: this device ID =', DEVICE_ID);
+  const recentPushes = {}; // key -> {time, deviceId} of last push by this device
 
   async function pushToFirebase(key, data) {
     try {
-      recentPushes[key] = Date.now();
-      await setDoc(doc(db, 'huami', key), { data: JSON.stringify(data), updatedAt: Date.now(), deviceId: DEVICE_ID });
-      console.log('Firebase: pushed', key);
+      const ts = Date.now();
+      recentPushes[key] = {time: ts, deviceId: DEVICE_ID};
+      await setDoc(doc(db, 'huami', key), { data: JSON.stringify(data), updatedAt: ts, deviceId: DEVICE_ID });
+      console.log('Firebase: pushed', key, 'deviceId:', DEVICE_ID.slice(0,6));
     } catch(e) { console.warn('Firebase push failed:', e.message); }
   }
 
@@ -478,12 +484,13 @@ input.field-error::placeholder{color:#C9826B}
         }
       });
 
-      // Style library sync (read-only for non-admin, push only from admin)
+      // Style library sync - all devices get the same style samples
       listenRemote('styleSamples', 'huakai_v4_style', (data) => {
         if (Array.isArray(data)) {
           window.styleSamples = data;
+          localStorage.setItem('huakai_v4_style', JSON.stringify(data));
           if (typeof renderStyleTab === 'function') renderStyleTab();
-          console.log('Firebase: style library synced from remote');
+          console.log('Firebase: style library synced, count:', data.length);
         }
       });
 
