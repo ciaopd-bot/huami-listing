@@ -371,6 +371,97 @@ input.field-error::placeholder{color:#C9826B}
   .calc-input,.calc-select{width:100%}
 }
 </style>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBBYYkKjs_hrA15520bspdHjVBnmgdk1_8",
+    authDomain: "huami-listing.firebaseapp.com",
+    projectId: "huami-listing",
+    storageBucket: "huami-listing.firebasestorage.app",
+    messagingSenderId: "786726232162",
+    appId: "1:786726232162:web:c91a5ab3fdc741ab7f313b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // ── Sync functions ──
+  const SYNC_THROTTLE = 2000; // ms
+  let syncTimers = {};
+
+  async function pushToFirebase(key, data) {
+    try {
+      await setDoc(doc(db, 'huami', key), { data: JSON.stringify(data), updatedAt: Date.now() });
+    } catch(e) { console.warn('Firebase push failed:', e.message); }
+  }
+
+  function throttledPush(key, data) {
+    clearTimeout(syncTimers[key]);
+    syncTimers[key] = setTimeout(() => pushToFirebase(key, data), SYNC_THROTTLE);
+  }
+
+  // Listen for remote changes and update local
+  function listenRemote(key, localKey, onUpdate) {
+    onSnapshot(doc(db, 'huami', key), (snap) => {
+      if (!snap.exists()) return;
+      const remote = snap.data();
+      // Skip if this device just pushed (within 3s)
+      if (Date.now() - (remote.updatedAt||0) < 3000) return;
+      try {
+        const parsed = JSON.parse(remote.data);
+        localStorage.setItem(localKey, JSON.stringify(parsed));
+        if (onUpdate) onUpdate(parsed);
+      } catch(e) {}
+    });
+  }
+
+  // Expose to global scope
+  window._fb = { pushToFirebase, throttledPush, listenRemote, db, doc, setDoc };
+
+  // Wait for app to boot then start sync
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      // Products sync
+      listenRemote('products', 'huakai_v4_products', (data) => {
+        if (Array.isArray(data)) {
+          window.products = data;
+          if (typeof renderProducts === 'function') renderProducts();
+          if (typeof renderOrderSummary === 'function') renderOrderSummary();
+          console.log('Firebase: products synced from remote');
+        }
+      });
+
+      // Settings sync
+      listenRemote('settings', 'huakai_v4_settings', (data) => {
+        if (data && typeof data === 'object') {
+          try {
+            if (data.teamname) document.getElementById('cfg-teamname').value = data.teamname;
+            if (data.cutoff) document.getElementById('cfg-cutoff').value = data.cutoff;
+            if (data.mid) document.getElementById('cfg-mid').value = data.mid;
+            if (data.notes) document.getElementById('cfg-notes').value = data.notes;
+            if (typeof updateNavTeamName === 'function') updateNavTeamName();
+          } catch(e) {}
+          console.log('Firebase: settings synced from remote');
+        }
+      });
+
+      // Style library sync (read-only for non-admin, push only from admin)
+      listenRemote('styleSamples', 'huakai_v4_style', (data) => {
+        if (Array.isArray(data)) {
+          window.styleSamples = data;
+          if (typeof renderStyleTab === 'function') renderStyleTab();
+          console.log('Firebase: style library synced from remote');
+        }
+      });
+
+      console.log('Firebase sync started ✓');
+    }, 1500);
+  });
+</script>
 </head>
 <body>
 
@@ -387,7 +478,7 @@ input.field-error::placeholder{color:#C9826B}
       <div class="nav-tab" onclick="switchPage('order')">訂貨管理</div>
       <div class="nav-tab" onclick="switchPage('history')">歷史紀錄</div>
     </div>
-    <div class="nav-right">
+    <div class="nav-right"><span id="syncDot" title="雲端同步狀態" style="font-size:10px;color:var(--ink-light);margin-right:4px">☁️</span>
       <button class="admin-btn" id="adminToggleBtn" onclick="toggleAdminMode()">🔒 管理員模式</button>
     </div>
   </nav>
@@ -1017,6 +1108,7 @@ function saveStyleSample() {
   if (!text) { showToast('請先貼入文案範例'); return; }
   styleSamples.push({id:Date.now(), tag, text, date:new Date().toLocaleDateString('zh-TW')});
   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
   renderStyleTab(); showToast('已存入文風庫 ✓');
 }
 
@@ -1029,6 +1121,7 @@ function saveFromResult() {
   // Direct save - no page switch needed
   styleSamples.push({id:Date.now(), tag, text, date:new Date().toLocaleDateString('zh-TW')});
   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
   // Flash the button to confirm
   const btn = document.getElementById('saveStyleBtn');
   if (btn) {
@@ -1045,6 +1138,7 @@ function removeStyleSample(id) {
   if (!isAdmin) return;
   styleSamples = styleSamples.filter(s=>s.id!==id);
   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
   renderStyleTab();
 }
 
@@ -1057,6 +1151,7 @@ function importStyleLib(e) {
     if (Array.isArray(arr)) {
       styleSamples = [...styleSamples, ...arr];
       localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
+  if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
       renderStyleTab(); showToast(`匯入 ${arr.length} 篇範例`);
     }
   });
@@ -1108,6 +1203,7 @@ function updateNavTeamName(){
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(getSettings()));
+  if(window._fb) window._fb.throttledPush('settings', getSettings());
   updateNavTeamName();
   const b=document.getElementById('savedBadge'); b.classList.add('on');
   setTimeout(()=>b.classList.remove('on'),2500); showToast('設定已儲存');
@@ -1574,6 +1670,7 @@ function confirmSendToOrder(){
   };
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
   // Flash the add button green to confirm
@@ -1664,6 +1761,7 @@ function confirmAddProduct(){
   apPhotos = [];
   products.push(product);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
 }
 
@@ -1754,6 +1852,7 @@ function toggleVariant(pi,vi,checked){
   products[pi].variants[vi].checked = checked;
   if(!checked) products[pi].variants[vi].qty = 0;
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   // Update row style
   const row=document.getElementById(`vrow-${pi}-${vi}`);
   if(row){
@@ -1770,6 +1869,7 @@ function changeQty(pi,vi,delta){
   if(products[pi].variants[vi].checked===false)return;
   products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   const el=document.getElementById(`qty-${pi}-${vi}`);
   if(el){el.textContent=products[pi].variants[vi].qty;el.className='qty-display'+(products[pi].variants[vi].qty>0?' has-qty':'');}
   renderOrderSummary();
@@ -1778,6 +1878,7 @@ function changeQty(pi,vi,delta){
 function removeProduct(pi){
   products.splice(pi,1);
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();
 }
 
@@ -1792,6 +1893,7 @@ function confirmBatch(){
   }));
   if(!total){showToast('尚未填入任何數量');return;}
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();
   showToast(`已確認 ${total} 件，已加入累計數量`);
 }
@@ -1827,6 +1929,7 @@ function clearAllOrders(){
   if(!confirm('清空本次數量？（累計已訂不受影響）')) return;
   products.forEach(p=>p.variants.forEach(v=>v.qty=0));
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();showToast('已清空本次數量');
 }
 
@@ -1834,6 +1937,7 @@ function resetAllTotals(){
   if(!confirm('確定要清空所有累計已訂數量嗎？')) return;
   products.forEach(p=>p.variants.forEach(v=>{v.totalOrdered=0;v.qty=0;}));
   localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products));
+    if(window._fb) window._fb.throttledPush('products', products);
   renderProducts();renderOrderSummary();showToast('已清空所有累計數量');
 }
 
