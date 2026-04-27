@@ -431,15 +431,22 @@ input.field-error::placeholder{color:#C9826B}
   // Wait for app to boot then start sync
   window.addEventListener('load', () => {
     setTimeout(() => {
-      // Products sync
-      listenRemote('products', 'huakai_v4_products', (data) => {
-        if (Array.isArray(data)) {
-          window.products = data;
-          if (typeof renderProducts === 'function') renderProducts();
-          if (typeof renderOrderSummary === 'function') renderOrderSummary();
-          console.log('Firebase: products synced from remote');
-        }
-      });
+      // Products sync - group-scoped
+      function setupProductsSync() {
+        const groupId = typeof getActiveGroupId === 'function' ? getActiveGroupId() : 'default';
+        const fbKey = 'products_' + groupId;
+        const localKey = 'huakai_v4_products_' + groupId;
+        listenRemote(fbKey, localKey, (data) => {
+          if (Array.isArray(data)) {
+            window.products = data;
+            if (typeof renderProducts === 'function') renderProducts();
+            if (typeof renderOrderSummary === 'function') renderOrderSummary();
+            console.log('Firebase: products synced from remote, group:', groupId);
+          }
+        });
+      }
+      setupProductsSync();
+      window._setupProductsSync = setupProductsSync;
 
       // Settings sync
       listenRemote('settings', 'huakai_v4_settings', (data) => {
@@ -1716,7 +1723,7 @@ function confirmSendToOrder(){
   };
   products.push(product);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
   // Flash the add button green to confirm
@@ -1807,7 +1814,7 @@ function confirmAddProduct(){
   apPhotos = [];
   products.push(product);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   closeModal('addProductModal');renderProducts();renderOrderSummary();showToast('商品已新增');
 }
 
@@ -1898,7 +1905,7 @@ function toggleVariant(pi,vi,checked){
   products[pi].variants[vi].checked = checked;
   if(!checked) products[pi].variants[vi].qty = 0;
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   // Update row style
   const row=document.getElementById(`vrow-${pi}-${vi}`);
   if(row){
@@ -1915,7 +1922,7 @@ function changeQty(pi,vi,delta){
   if(products[pi].variants[vi].checked===false)return;
   products[pi].variants[vi].qty=Math.max(0,(products[pi].variants[vi].qty||0)+delta);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   const el=document.getElementById(`qty-${pi}-${vi}`);
   if(el){el.textContent=products[pi].variants[vi].qty;el.className='qty-display'+(products[pi].variants[vi].qty>0?' has-qty':'');}
   renderOrderSummary();
@@ -1924,7 +1931,7 @@ function changeQty(pi,vi,delta){
 function removeProduct(pi){
   products.splice(pi,1);
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();
 }
 
@@ -1939,7 +1946,7 @@ function confirmBatch(){
   }));
   if(!total){showToast('尚未填入任何數量');return;}
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();
   showToast(`已確認 ${total} 件，已加入累計數量`);
 }
@@ -1975,7 +1982,7 @@ function clearAllOrders(){
   if(!confirm('清空本次數量？（累計已訂不受影響）')) return;
   products.forEach(p=>p.variants.forEach(v=>v.qty=0));
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();showToast('已清空本次數量');
 }
 
@@ -1983,7 +1990,7 @@ function resetAllTotals(){
   if(!confirm('確定要清空所有累計已訂數量嗎？')) return;
   products.forEach(p=>p.variants.forEach(v=>{v.totalOrdered=0;v.qty=0;}));
   localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fb) window._fb.throttledPush('products', products);
+    if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   renderProducts();renderOrderSummary();showToast('已清空所有累計數量');
 }
 
@@ -2961,6 +2968,8 @@ function switchGroup(id) {
   const g = getActiveGroup();
   const el = document.getElementById('activeGroupDisplay');
   if (el) el.textContent = g.name;
+  // Re-setup Firebase listener for new group
+  if (window._setupProductsSync) window._setupProductsSync();
   // Re-render current page
   if (document.getElementById('page-order')?.classList.contains('active')) { renderProducts(); renderOrderSummary(); }
   if (document.getElementById('page-history')?.classList.contains('active')) renderHistory();
