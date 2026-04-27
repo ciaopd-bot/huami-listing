@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>huami 開團工具</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -996,7 +999,7 @@ EX：+1
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('sendToOrderModal')">取消</button>
-      <button class="btn btn-leaf" onclick="confirmSendToOrder()">加入訂貨清單 ✓</button>
+      <button class="btn btn-leaf" onclick="closeModal('sendToOrderModal');confirmSendToOrder()">加入訂貨清單 ✓</button>
     </div>
   </div>
 </div>
