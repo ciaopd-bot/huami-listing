@@ -3083,19 +3083,11 @@ async function queryMarketPrice() {
 // GOOGLE LENS
 // ══════════════════════════════════════════════
 function openGoogleLens() {
-  // 用商品名稱 + 關鍵字帶入 Google 搜尋
   const name = document.getElementById('prodName')?.value.trim() || '';
-  const kw = document.getElementById('prodKeyword')?.value.trim().split('
-')[0] || '';
+  const kw = (document.getElementById('prodKeyword')?.value.trim() || '').split('\n')[0];
   const query = (name || kw).trim();
-  // 開 Google Lens 上傳頁面
-  const lensUrl = 'https://lens.google.com/';
-  window.open(lensUrl, '_blank');
-  if (query) {
-    showToast('Google Lens 已開啟，請將商品照片拖入搜尋');
-  } else {
-    showToast('Google Lens 已開啟，請拖入照片以圖搜圖');
-  }
+  window.open('https://lens.google.com/', '_blank');
+  showToast('Google Lens 已開啟，請將商品照片拖入搜尋');
 }
 
 // ══════════════════════════════════════════════
