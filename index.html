@@ -1104,6 +1104,7 @@ function switchPage(name) {
   document.querySelectorAll('.nav-tab').forEach((t,i) => t.classList.toggle('active', ['listing','order','history'][i]===name));
   if (name==='order') renderProducts();
   if (name==='history') renderHistory();
+  sessionStorage.setItem('_huami_page', name);
 }
 
 function switchInnerTab(name) {
@@ -3121,6 +3122,9 @@ loadHistory();
 renderStyleTab();
 updateAdminUI();
 fetchRates();
+// Restore last visited page after refresh
+const _lastPage = sessionStorage.getItem('_huami_page');
+if (_lastPage && ['listing','order','history'].includes(_lastPage)) switchPage(_lastPage);
 // Init calc - restore last used country
 setTimeout(()=>{
   const saved = localStorage.getItem('huakai_default_country') || 'KR';
