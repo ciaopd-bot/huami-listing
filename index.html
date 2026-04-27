@@ -1302,13 +1302,13 @@ async function runAI(){
   });
   const supplierSection=supplierCopy?`\n廠商文案（${currentMode==='direct'?'直接沿用':'參考用，不要照抄'}）：\n"""\n${supplierCopy}\n"""\n`:'';
   const urlSection=refUrls.length?`\n參考網址：\n${refUrls.map((u,i)=>`${i+1}. ${u}`).join('\n')}\n`:'';
+  const keywordRaw=document.getElementById('prodKeyword').value.trim();
+  const keywordLines=keywordRaw?keywordRaw.split('\n').map(k=>k.trim()).filter(Boolean):[];
+  const keyword=keywordLines.join('、');
   const searchKw=keyword||'此商品';
   const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`你必須實際使用 web_search 工具搜尋，不可只憑照片猜測。請依序：1)搜尋商品名稱品牌產地（中文+原文） 2)搜尋「${searchKw} 評價 心得」找台灣網友感受 3)若有參考網址請抓取內容 4)搜尋商品圖片URL（3~6個）。將搜尋結果整合進描述。`;
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock().slice(0,200)}`;
-  const keywordRaw=document.getElementById('prodKeyword').value.trim();
-  const keywordLines=keywordRaw?keywordRaw.split('\n').map(k=>k.trim()).filter(Boolean):[];
-  const keyword=keywordLines.join('、');
   const keywordHint=keyword?`\n這個商品有以下名稱（不同語言的同一商品）：${keywordLines.map((k,i)=>`\n${i+1}. ${k}`).join('')}\n請以這些名稱搜尋並辨識商品，輸出一律用繁體中文。`:'';
   const prompt=`你是「${s.teamname}」的上架文案小幫手。${keywordHint}${supplierSection}${urlSection}
 【必須執行，不可省略】:
@@ -2288,56 +2288,7 @@ function applyCrops(){
 
 function zoomCrop(delta){ /* no-op, CSS handles display size */ }
 
-function renderCropSidebar(){
-  const sidebar = document.getElementById('cropSidebar');
-  if(!cropZones.length){
-    sidebar.innerHTML = '<div class="crop-hint" id="cropHint">框選後裁切的顏色會出現在這裡</div>';
-    return;
-  }
-  sidebar.innerHTML = '';
-  cropZones.forEach((z,i)=>{
-    const div = document.createElement('div');
-    div.className = 'crop-zone';
-    div.innerHTML = `
-      <img class="crop-zone-img" src="${z.dataUrl}"/>
-      <div class="crop-zone-label">
-        <input type="text" value="${z.label}" placeholder="顏色名稱" onchange="cropZones[${i}].label=this.value;renderCropCanvas()"/>
-        <button class="crop-zone-rm" onclick="removeCropZone(${i})">✕</button>
-      </div>`;
-    sidebar.appendChild(div);
-  });
-}
-
-function removeCropZone(i){
-  cropZones.splice(i,1);
-  renderCropCanvas();
-  renderCropSidebar();
-  if(!cropZones.length) document.getElementById('cropApplyBtn').style.display = 'none';
-}
-
-function clearCrops(){
-  cropZones = [];
-  renderCropCanvas();
-  renderCropSidebar();
-  document.getElementById('cropApplyBtn').style.display = 'none';
-}
-
-function applyCrops(){
-  if(!cropZones.length){ showToast('請先框選顏色區域'); return; }
-  // Convert dataUrls to img objects and add to imgs array
-  cropZones.forEach((z, i)=>{
-    const id = Date.now() + i + Math.random();
-    imgs.push({id, b64: z.dataUrl, type: 'image/jpeg'});
-  });
-  renderThumbs();
-  // Also fill variants from zone labels
-  const variantsEl = document.getElementById('prodVariants');
-  if(variantsEl && !variantsEl.value.trim()){
-    variantsEl.value = cropZones.map(z=>z.label).join('\n');
-  }
-  closeCropTool();
-  showToast(`✓ 已裁切 ${cropZones.length} 個顏色並加入照片`);
-}
+// (duplicate crop functions removed)
 
 // ══════════════════════════════════════════════
 // PRICING CALCULATOR (完整版)
