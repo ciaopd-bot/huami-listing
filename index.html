@@ -448,15 +448,24 @@ input.field-error::placeholder{color:#C9826B}
         _unsubscribeProducts = onSnapshot(doc(db, 'huami', fbKey), (snap) => {
           if (!snap.exists()) { console.log('Firebase: no products doc yet for', fbKey); return; }
           const remote = snap.data();
-          console.log('Firebase: products snapshot received, deviceId match:', remote.deviceId === DEVICE_ID);
-          if (remote.deviceId === DEVICE_ID) return; // skip own push
+          if (remote.deviceId === DEVICE_ID) { console.log('Firebase: skip own push'); return; }
           try {
             const parsed = JSON.parse(remote.data);
+            // 只有在本機沒有比較新的資料時才覆蓋
+            const localRaw = localStorage.getItem(localKey);
+            const localData = localRaw ? JSON.parse(localRaw) : [];
+            // 比較筆數：如果本機比 Firebase 多，代表有未同步的新增，等 throttle push 完成
+            const remoteTime = remote.updatedAt || 0;
+            const localMaxId = localData.reduce((max, p) => Math.max(max, p.id||0), 0);
+            if (localMaxId > remoteTime) {
+              console.log('Firebase: local has newer data, skip remote overwrite');
+              return;
+            }
             localStorage.setItem(localKey, JSON.stringify(parsed));
             window.products = parsed;
             if (typeof renderProducts === 'function') renderProducts();
             if (typeof renderOrderSummary === 'function') renderOrderSummary();
-            console.log('Firebase: products SYNCED from remote, group:', groupId, 'count:', parsed.length);
+            console.log('Firebase: products SYNCED from remote, count:', parsed.length);
           } catch(e) { console.warn('Firebase products parse error:', e); }
         }, (err) => { console.error('Firebase products listener error:', err); });
         console.log('Firebase: listening to products for group:', groupId);
@@ -558,6 +567,7 @@ input.field-error::placeholder{color:#C9826B}
       </div>
     </div>
     <div class="nav-right"><span id="syncDot" title="雲端同步狀態" style="font-size:10px;color:var(--ink-light);margin-right:4px">☁️</span>
+      <button id="popoutBtn" onclick="popoutCurrentPage()" title="另開視窗" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;color:var(--ink-light);transition:all 0.15s" onmouseenter="this.style.borderColor='var(--rose)';this.style.color='var(--rose)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--ink-light)'">⧉</button>
       <button class="admin-btn" id="adminToggleBtn" onclick="toggleAdminMode()">🔒 管理員模式</button>
     </div>
   </nav>
@@ -1792,19 +1802,41 @@ function confirmSendToOrder(){
   const price=document.getElementById('sto-price').value.trim();
   const variantRaw=document.getElementById('sto-variants').value.trim();
   if(!name){showToast('請填入商品名稱');return;}
+  closeModal('sendToOrderModal'); // 先關閉視窗
   const variants=variantRaw?variantRaw.split('\n').map(v=>v.trim()).filter(Boolean):['單一款式'];
-  const thumb=(imgs.length>0?imgs[0].b64:null) || window._historyThumb || null;
-  // Map each variant to its corresponding photo (by index)
-  const allThumbs = imgs.length > 0 ? imgs.map(i=>i.b64) : (window._historyThumb ? [window._historyThumb] : []);
+  // 縮小縮圖到 80x80 以節省 localStorage 空間
+  function makeSmallThumb(b64) {
+    if (!b64) return null;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 80; canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.src = b64;
+      ctx.drawImage(img, 0, 0, 80, 80);
+      return canvas.toDataURL('image/jpeg', 0.5);
+    } catch(e) { return b64.slice(0, 2000); }
+  }
+  const rawThumb = (imgs.length>0?imgs[0].b64:null) || window._historyThumb || null;
+  const thumb = makeSmallThumb(rawThumb);
+  // 每個款式的縮圖也縮小
+  const allThumbs = imgs.length > 0 ? imgs.map(i=>makeSmallThumb(i.b64)) : (window._historyThumb ? [makeSmallThumb(window._historyThumb)] : []);
   window._historyThumb = null;
   const product={
     id:Date.now(),name,vendor,price,thumb,
-    photos: allThumbs, // all photos indexed by variant
+    photos: allThumbs,
     variants:variants.map((v,vi)=>({label:v,qty:0,checked:true,totalOrdered:0,photoIdx:vi}))
   };
   products.push(product);
-  localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
-    if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
+  try {
+    localStorage.setItem(getGroupProductsKey(),JSON.stringify(products));
+  } catch(e) {
+    // localStorage 滿了 - 清除舊照片再試
+    console.warn('localStorage quota exceeded, cleaning old photos...');
+    products.forEach(p => { p.thumb = null; if(p.photos) p.photos = []; });
+    try { localStorage.setItem(getGroupProductsKey(),JSON.stringify(products)); } catch(e2) {}
+  }
+  if(window._fbPushProducts) window._fbPushProducts(products); else if(window._fb){ const _gid = typeof getActiveGroupId==='function'?getActiveGroupId():'default'; window._fb.throttledPush('products_'+_gid, products); }
   closeModal('sendToOrderModal');
   showToast('✓ 已加入訂貨清單');
   // Flash the add button green to confirm
@@ -3012,6 +3044,57 @@ async function queryMarketPrice() {
   btn.textContent = '🔍 查市場售價';
   btn.disabled = false;
 }
+
+// ══════════════════════════════════════════════
+// POPOUT WINDOW
+// ══════════════════════════════════════════════
+function popoutCurrentPage() {
+  // 取得目前在哪個頁面
+  const pages = ['listing','order','history'];
+  const current = pages.find(p => document.getElementById('page-'+p)?.classList.contains('active')) || 'order';
+  // 只有 order 和 history 有意義
+  if (current === 'listing') {
+    showToast('另開視窗適合「訂貨管理」或「歷史紀錄」');
+    return;
+  }
+  // 帶上參數讓新視窗知道要顯示哪個頁面
+  const url = location.origin + location.pathname + '?popout=' + current;
+  const w = window.open(url, '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+  if (!w) showToast('請允許彈出視窗');
+}
+
+// 如果是 popout 視窗，自動切換到指定頁面
+(function checkPopout() {
+  const params = new URLSearchParams(location.search);
+  const popout = params.get('popout');
+  if (popout) {
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        switchPage(popout);
+        // 隱藏一些不需要的 UI 元素
+        document.title = (popout === 'order' ? '📦 訂貨管理' : '📋 歷史紀錄') + ' | huami';
+      }, 800);
+    });
+  }
+})();
+
+// ══════════════════════════════════════════════
+// OPEN NEW WINDOW
+// ══════════════════════════════════════════════
+function openNewWindow() {
+  const page = sessionStorage.getItem('_huami_page') || 'listing';
+  const url = location.origin + location.pathname + '?page=' + page;
+  window.open(url, '_blank', 'width=1200,height=800');
+}
+
+// 從 URL 參數讀取初始頁面
+(function() {
+  const params = new URLSearchParams(location.search);
+  const page = params.get('page');
+  if (page && ['listing','order','history'].includes(page)) {
+    sessionStorage.setItem('_huami_page', page);
+  }
+})();
 
 // ══════════════════════════════════════════════
 // GROUP MANAGEMENT
