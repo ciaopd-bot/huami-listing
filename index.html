@@ -705,8 +705,9 @@ input.field-error::placeholder{color:#C9826B}
 
             <!-- 市場查價 -->
             <div class="section" style="margin-top:-4px">
-              <div style="display:flex;gap:8px;align-items:center">
+              <div style="display:flex;gap:6px;align-items:center">
                 <button id="marketPriceBtn" onclick="queryMarketPrice()" style="flex:1;padding:7px 10px;border:1px solid var(--blue-border);border-radius:8px;background:var(--blue-light);color:var(--blue);font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s">🔍 查市場售價</button>
+                <button onclick="openGoogleLens()" title="用 Google Lens 以圖搜圖" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s;white-space:nowrap">🔎 Google Lens</button>
               </div>
               <div id="marketPriceResult" style="display:none;margin-top:8px;padding:10px 12px;background:var(--white);border:1px solid var(--blue-border);border-radius:8px;font-size:12px;color:var(--ink);line-height:1.75"></div>
             </div>
@@ -1705,7 +1706,25 @@ function buildPost(){
   document.querySelector('.main-area').scrollTop=0;
   updateAdminUI();
   // Auto-save to history
-  setTimeout(()=>saveToHistory(name, pf, getFullText(), imgs.length>0?imgs[0].b64:null), 50);
+  // 縮圖壓縮後才存，避免 localStorage 超量
+  setTimeout(()=>{
+    let thumb = null;
+    if (imgs.length > 0 && imgs[0].b64) {
+      // 縮圖壓縮到最小 (max 80px)
+      try {
+        const canvas = document.createElement('canvas');
+        const img = new Image();
+        img.src = imgs[0].b64;
+        const MAX = 80;
+        const ratio = Math.min(MAX/img.naturalWidth, MAX/img.naturalHeight, 1);
+        canvas.width = Math.round(img.naturalWidth * ratio);
+        canvas.height = Math.round(img.naturalHeight * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        thumb = canvas.toDataURL('image/jpeg', 0.5);
+      } catch(e) { thumb = null; }
+    }
+    saveToHistory(name, pf, getFullText(), thumb);
+  }, 100);
 }
 
 function updateRfCharCount(text){
@@ -2791,7 +2810,12 @@ const HISTORY_KEY = 'huakai_v4_history';
 let historyItems = [];
 
 function loadHistory() {
-  try { historyItems = JSON.parse(localStorage.getItem(getGroupHistoryKey ? getGroupHistoryKey() : HISTORY_KEY)||'[]'); } catch(e){ historyItems=[]; }
+  try {
+    const raw = localStorage.getItem(getGroupHistoryKey ? getGroupHistoryKey() : HISTORY_KEY)||'[]';
+    historyItems = JSON.parse(raw);
+    // 清掉佔位符
+    historyItems = historyItems.map(h => ({...h, thumb: h.thumb === '__has_thumb__' ? null : h.thumb}));
+  } catch(e){ historyItems=[]; }
 }
 
 function saveToHistory(name, price, fullText, thumb) {
@@ -2806,7 +2830,14 @@ function saveToHistory(name, price, fullText, thumb) {
   };
   historyItems.unshift(item);
   if (historyItems.length > 50) historyItems = historyItems.slice(0,50);
-  localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyItems));
+  // 只存文字到 localStorage（不存圖片避免超量）
+  const historyNoThumb = historyItems.map(h => ({...h, thumb: h.thumb ? '__has_thumb__' : null}));
+  try { localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyNoThumb)); } catch(e) {
+    // localStorage 滿了就清掉最舊的一半
+    historyItems = historyItems.slice(0, 25);
+    try { localStorage.setItem(getGroupHistoryKey(), JSON.stringify(historyItems.map(h=>({...h,thumb:null})))); } catch(e2) {}
+  }
+  // Firebase 存完整資料（含小縮圖）
   if (window._fb) {
     const _hgid = typeof getActiveGroupId==='function'?getActiveGroupId():'default';
     window._fb.throttledPush('history_'+_hgid, historyItems);
@@ -3049,6 +3080,25 @@ async function queryMarketPrice() {
 }
 
 // ══════════════════════════════════════════════
+// GOOGLE LENS
+// ══════════════════════════════════════════════
+function openGoogleLens() {
+  // 用商品名稱 + 關鍵字帶入 Google 搜尋
+  const name = document.getElementById('prodName')?.value.trim() || '';
+  const kw = document.getElementById('prodKeyword')?.value.trim().split('
+')[0] || '';
+  const query = (name || kw).trim();
+  // 開 Google Lens 上傳頁面
+  const lensUrl = 'https://lens.google.com/';
+  window.open(lensUrl, '_blank');
+  if (query) {
+    showToast('Google Lens 已開啟，請將商品照片拖入搜尋');
+  } else {
+    showToast('Google Lens 已開啟，請拖入照片以圖搜圖');
+  }
+}
+
+// ══════════════════════════════════════════════
 // POPOUT WINDOW
 // ══════════════════════════════════════════════
 function popoutCurrentPage() {
@@ -3249,6 +3299,16 @@ function deleteGroup(id) {
 // ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
+// 清除可能過大的 localStorage 歷史紀錄
+try {
+  const hKey = 'huakai_v4_history_default';
+  const raw = localStorage.getItem(hKey);
+  if (raw && raw.length > 500000) { // 超過 500KB 就清掉
+    localStorage.removeItem(hKey);
+    console.log('Cleared oversized history from localStorage');
+  }
+} catch(e) {}
+
 initGroups(); // 必須最先，確保 getActiveGroupId() 正確
 // 讀取目前團的商品
 try { products = JSON.parse(localStorage.getItem(getGroupProductsKey())||'[]'); } catch(e){ products=[]; }
