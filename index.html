@@ -440,18 +440,19 @@ input.field-error::placeholder{color:#C9826B}
         // Unsubscribe previous listener if exists
         if (_unsubscribeProducts) { try { _unsubscribeProducts(); } catch(e){} }
         _unsubscribeProducts = onSnapshot(doc(db, 'huami', fbKey), (snap) => {
-          if (!snap.exists()) return;
+          if (!snap.exists()) { console.log('Firebase: no products doc yet for', fbKey); return; }
           const remote = snap.data();
-          if (remote.deviceId === DEVICE_ID) return;
+          console.log('Firebase: products snapshot received, deviceId match:', remote.deviceId === DEVICE_ID);
+          if (remote.deviceId === DEVICE_ID) return; // skip own push
           try {
             const parsed = JSON.parse(remote.data);
             localStorage.setItem(localKey, JSON.stringify(parsed));
             window.products = parsed;
             if (typeof renderProducts === 'function') renderProducts();
             if (typeof renderOrderSummary === 'function') renderOrderSummary();
-            console.log('Firebase: products received, group:', groupId, 'count:', parsed.length);
-          } catch(e) { console.warn('products sync parse error', e); }
-        });
+            console.log('Firebase: products SYNCED from remote, group:', groupId, 'count:', parsed.length);
+          } catch(e) { console.warn('Firebase products parse error:', e); }
+        }, (err) => { console.error('Firebase products listener error:', err); });
         console.log('Firebase: listening to products for group:', groupId);
       }
       setupProductsSync();
@@ -639,13 +640,19 @@ input.field-error::placeholder{color:#C9826B}
                     <div class="calc-result-main" id="calcRetail"></div>
                   </div>
                   <div class="calc-result-detail" id="calcResultDetail"></div>
-                  <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+                  <div style="margin-top:8px">
                     <button style="font-size:12px;padding:5px 14px;border:1px solid var(--rose-light);border-radius:6px;background:var(--petal);color:var(--rose-dark);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="applyCalcPrice('retail')">套用此售價 →</button>
-                    <button id="marketPriceBtn" style="font-size:12px;padding:5px 14px;border:1px solid var(--blue-border);border-radius:6px;background:var(--blue-light);color:var(--blue);cursor:pointer;font-family:'Noto Sans TC',sans-serif" onclick="queryMarketPrice()">🔍 查市場售價</button>
                   </div>
-                  <div id="marketPriceResult" style="display:none;margin-top:10px;padding:10px 12px;background:var(--cream);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--ink);line-height:1.7"></div>
                 </div>
               </div>
+            </div>
+
+            <!-- 市場查價 -->
+            <div class="section" style="margin-top:-4px">
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="marketPriceBtn" onclick="queryMarketPrice()" style="flex:1;padding:7px 10px;border:1px solid var(--blue-border);border-radius:8px;background:var(--blue-light);color:var(--blue);font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s">🔍 查市場售價</button>
+              </div>
+              <div id="marketPriceResult" style="display:none;margin-top:8px;padding:10px 12px;background:var(--white);border:1px solid var(--blue-border);border-radius:8px;font-size:12px;color:var(--ink);line-height:1.75"></div>
             </div>
 
             <div class="section">
@@ -1494,7 +1501,7 @@ async function runAI(){
   const keywordLines=keywordRaw?keywordRaw.split('\n').map(k=>k.trim()).filter(Boolean):[];
   const keyword=keywordLines.join('、');
   const searchKw=keyword||'此商品';
-  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`你必須實際使用 web_search 工具搜尋，不可只憑照片猜測。請依序：1)搜尋商品名稱品牌產地（中文+原文） 2)搜尋品牌歷史、創立背景、獲獎紀錄、在當地的人氣或知名度 3)搜尋「${searchKw} 評價 心得」找台灣網友感受 4)若有參考網址請抓取內容 5)搜尋商品圖片URL（3~6個）。將搜尋結果整合進描述，品牌故事或獲獎資訊若有找到請自然融入文案。`;
+  const searchInstruction=noSearch?'不需要搜尋網路，只根據照片與文案撰寫。':`你必須實際使用 web_search 工具搜尋，不可只憑照片猜測。請依序：1)搜尋商品名稱品牌產地（中文+原文） 2)搜尋品牌歷史、創立背景、獲獎紀錄、在當地的人氣或知名度 3)搜尋「${searchKw} 評價 心得」了解台灣網友真實感受（只做資料參考，不要引用「網友說」「有人說」等字眼，把感受化為自己的敘述） 4)若有參考網址請抓取內容 5)搜尋商品圖片URL（3~6個）。將搜尋結果整合進描述；品牌故事或獲獎若有資料可偶爾自然帶入，不需每篇都有。`;
   const styleShort=`語氣像朋友推薦，口語化，300-400字，不用AI腔，禁用破折號—，不用「不僅如此/值得一提/令人」。`;
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，格式調整即可。':`MIX改寫，${styleShort}${getStyleExamplesBlock(keyword||document.getElementById('prodName')?.value||'').slice(0,600)}`;
   const keywordHint=keyword?`\n這個商品有以下名稱（不同語言的同一商品）：${keywordLines.map((k,i)=>`\n${i+1}. ${k}`).join('')}\n請以這些名稱搜尋並辨識商品，輸出一律用繁體中文。`:'';
