@@ -1253,7 +1253,7 @@ function renderStyleListHTML() {
     <div class="style-sample">
       <div class="style-sample-meta">
         <span>${s.tag?`<span class="badge badge-rose">${s.tag}</span> `:''}${s.date}</span>
-        <button class="style-sample-rm" onclick="removeStyleSample(${s.id})">✕ 刪除</button>
+        <div style="display:flex;gap:4px">   <button class="style-sample-rm" onclick="editStyleTag(${s.id})" style="color:var(--blue);border:1px solid var(--blue-border);border-radius:4px;padding:2px 6px">✎ 編輯標籤</button>   <button class="style-sample-rm" onclick="removeStyleSample(${s.id})">✕ 刪除</button> </div>
       </div>
       <div class="style-sample-text">${s.text.replace(/</g,'&lt;')}</div>
     </div>`).join('');
@@ -1299,6 +1299,8 @@ function removeStyleSample(id) {
   if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
   renderStyleTab();
 }
+
+function editStyleTag(id) {   if (!isAdmin) { showToast('需要管理員權限'); return; }   const sample = styleSamples.find(s=>s.id===id);   if (!sample) return;   const newTag = prompt('編輯標籤（多個標籤用、分隔）：', sample.tag||'');   if (newTag === null) return;   sample.tag = newTag.trim();   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));   if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);   renderStyleTab();   showToast('標籤已更新 ✓'); }
 
 function exportStyleLib() {
   download('huami文風庫.json', JSON.stringify(styleSamples, null, 2));
