@@ -3329,36 +3329,6 @@ setTimeout(()=>{
   if (sel) sel.value = saved;
   onCountryChange();
 }, 100);
-  // ══════════════════════════════════════════════
-// URL 參數自動帶入（採購系統串接）
-// ══════════════════════════════════════════════
-setTimeout(()=>{
-  const params = new URLSearchParams(location.search);
-  const name = params.get('name');
-  const vol = params.get('vol');
-  const variants = params.get('variants');
-  const keyword = params.get('keyword');
-  const price = params.get('price');
-
-  if(name){
-    document.getElementById('prodName').value = decodeURIComponent(name);
-  }
-  if(vol){
-    document.getElementById('prodVol').value = decodeURIComponent(vol);
-  }
-  if(variants){
-    document.getElementById('prodVariants').value = decodeURIComponent(variants).replace(/,/g,'\n');
-  }
-  if(keyword){
-    document.getElementById('prodKeyword').value = decodeURIComponent(keyword);
-  }
-  if(price){
-    document.getElementById('prodPrice').value = decodeURIComponent(price);
-  }
-  if(name || vol || variants){
-    showToast('已自動帶入採購資料，可直接上傳照片產生上架文');
-  }
-}, 500);
 </script>
 </body>
 </html>
