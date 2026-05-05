@@ -2959,15 +2959,48 @@ function copyHistory(id) {
 function loadHistory_item(id) {
   const item = historyItems.find(h=>h.id===id);
   if (!item) return;
-  // Fill preview textarea and switch to listing
   switchPage('listing');
   setTimeout(()=>{
     document.getElementById('emptyState').style.display='none';
     document.getElementById('resultPanel').style.display='block';
-    document.getElementById('unifiedPost').value = item.fullText||'';
+
+    const fullText = item.fullText || '';
+    document.getElementById('unifiedPost').value = fullText;
+
+    // 同步回 rf-intro（讓「存入文風庫」可以讀取）
+    const rfIntro = document.getElementById('rf-intro');
+    if (rfIntro) rfIntro.value = fullText;
+
+    // 從上架文解析商品名稱和售價填回欄位（讓重新產生可以用）
+    const lines = fullText.split('\n');
+    const titleLine = lines[0] || '';
+    const parsedName = titleLine.includes('｜') ? titleLine.split('｜')[1]?.trim() : '';
+    if (parsedName) {
+      const nameEl = document.getElementById('prodName');
+      if (nameEl && !nameEl.value) nameEl.value = parsedName;
+    }
+
+    // 解析售價
+    const priceLine = lines[1] || '';
+    const priceMatch = priceLine.match(/[\d,]+/);
+    if (priceMatch) {
+      const priceEl = document.getElementById('prodPrice');
+      if (priceEl && !priceEl.value) priceEl.value = priceLine.trim();
+    }
+
+    // 解析介紹文（第3行之後到規格之前）
+    const introStart = lines.findIndex(l => l.includes('#') && l.includes('=>'));
+    const introEnd = lines.findIndex(l => l.startsWith('【'));
+    if (introStart >= 0 && introEnd > introStart) {
+      const intro = lines.slice(introStart + 1, introEnd).join('\n').trim();
+      const descEl = document.getElementById('prodDesc');
+      if (descEl && !descEl.value) descEl.value = intro;
+    }
+
+    _regenCount = 0; // 重置重新產生計數
     onUnifiedEdit(); updateUnifiedChar();
-    showToast('已載入歷史文案，可在預覽區編輯後複製');
-  },100);
+    showToast('已載入歷史文案，可按「重新產生」產生不同版本');
+  }, 100);
 }
 
 function historyToOrder(id) {
