@@ -1679,6 +1679,9 @@ let _regenCount = 0; // 記錄重新產生次數，確保每次不同
 async function regenDesc(){
   const name=document.getElementById('prodName').value.trim();
   const supplierCopy=document.getElementById('supplierCopy').value.trim();
+  // 如果沒有廠商文案，用現有介紹文作為參考素材（從歷史紀錄載入時）
+  const existingDesc=document.getElementById('prodDesc').value.trim();
+  const refCopy = supplierCopy || existingDesc;
   const s=getSettings();
   _regenCount++;
   const angleNames=['情境','賣點','口感','人氣','故事'];
@@ -1694,7 +1697,7 @@ async function regenDesc(){
     '請用說故事的方式切入，開頭帶出一個讓人有共鳴的情境或小故事。',
   ];
   const angleHint = angles[(_regenCount-1) % angles.length];
-  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n${angleHint}\n注意：語氣要自然口語，避免太過制式或 AI 腔，字數 300-450 字。請只輸出商品介紹文本身，不要 JSON 或標題。`;
+  const prompt=`商品名稱：${name}\n${refCopy?`參考資料：\n${refCopy.slice(0,400)}\n`:''}\n${modeInstruction}\n${angleHint}\n注意：請產生與現有版本「明顯不同風格」的新版本，語氣自然口語，避免 AI 腔，字數 300-450 字。請只輸出商品介紹文本身，不要 JSON 或標題。`;
   try{
     const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
