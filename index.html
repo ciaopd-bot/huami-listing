@@ -1054,6 +1054,31 @@ EX：+1
 <canvas id="orderCanvas"></canvas>
 <div class="toast" id="toast"></div>
 
+<!-- ── Style Tag Modal ── -->
+<div class="modal-overlay hidden" id="styleTagModal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">＋ 存入文風庫</div>
+    <div class="modal-sub" id="styleTagHint" style="margin-bottom:12px;color:var(--ink-light);font-size:12px"></div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:13px;font-weight:500;color:var(--ink);display:block;margin-bottom:6px">商品標籤</label>
+      <select id="styleTagSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:'Noto Sans TC',sans-serif;font-size:13px;background:var(--white)">
+        <option value="">未分類</option>
+        <option value="食品">🍱 食品 / 零食</option>
+        <option value="保養品">🧴 保養品</option>
+        <option value="美妝">💄 美妝</option>
+        <option value="服飾">👗 服飾 / 配件</option>
+        <option value="清潔">🧼 清潔 / 洗護</option>
+        <option value="生活">🏠 生活用品</option>
+        <option value="其他">📦 其他</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('styleTagModal')">取消</button>
+      <button class="btn btn-rose" onclick="confirmSaveStyle()">存入文風庫 ✓</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Group Manager Modal ── -->
 <div class="modal-overlay hidden" id="groupModal">
   <div class="modal" style="max-width:420px">
@@ -1275,26 +1300,50 @@ function saveStyleSample() {
   renderStyleTab(); showToast('已存入文風庫 ✓');
 }
 
+function detectStyleTag(name) {
+  const n = (name||'').toLowerCase();
+  const tagMap = [
+    ['食品', ['食','零食','餅','海苔','巧克力','糖','飲料','泡麵','醬','湯','米','麵','點心']],
+    ['保養品', ['保養','護膚','精華','面膜','乳液','防曬','精油','化妝水','眼霜','霜']],
+    ['美妝', ['彩妝','口紅','粉底','眼影','睫毛','腮紅','唇彩']],
+    ['服飾', ['服飾','上衣','褲','裙','包包','鞋','帽','飾品']],
+    ['清潔', ['清潔','洗臉','洗髮','沐浴','洗手']],
+  ];
+  for (const [tag, kws] of tagMap) {
+    if (kws.some(kw => n.includes(kw))) return tag;
+  }
+  return '';
+}
+
 function saveFromResult() {
   if (!isAdmin) { showToast('需要管理員權限才能存入文風庫'); return; }
-  const text = document.getElementById('rf-intro').value.trim();
-  if (!text) { showToast('介紹文為空'); return; }
+  // 優先讀 rf-intro，其次讀 unifiedPost（從歷史紀錄載入時）
+  const text = (document.getElementById('rf-intro').value || document.getElementById('unifiedPost').value).trim();
+  if (!text) { showToast('介紹文為空，請先產生上架文'); return; }
   const name = document.getElementById('prodName').value.trim();
-  const tag = (name.split('・').pop()||'').split(' ')[0];
-  // Direct save - no page switch needed
+  const autoTag = detectStyleTag(name);
+  // 顯示標籤選擇 modal
+  window._pendingStyleText = text;
+  window._pendingStyleAutoTag = autoTag;
+  const sel = document.getElementById('styleTagSelect');
+  if (sel) sel.value = autoTag || '';
+  const hint = document.getElementById('styleTagHint');
+  if (hint) hint.textContent = autoTag ? `自動偵測到：${autoTag}` : '未能自動偵測，請手動選擇';
+  openModal('styleTagModal');
+}
+
+function confirmSaveStyle() {
+  const text = window._pendingStyleText;
+  if (!text) { closeModal('styleTagModal'); return; }
+  const tag = document.getElementById('styleTagSelect').value.trim();
   styleSamples.push({id:Date.now(), tag, text, date:new Date().toLocaleDateString('zh-TW')});
   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));
-  if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
-  // Flash the button to confirm
-  const btn = document.getElementById('saveStyleBtn');
-  if (btn) {
-    const orig = btn.innerHTML;
-    btn.innerHTML = '✓ 已存入文風庫';
-    btn.style.background = '#d0e8d0';
-    btn.style.borderColor = '#7A9E7E';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.borderColor = ''; }, 2000);
-  }
-  showToast(`「${tag||'商品'}」已存入文風庫 ✓`);
+  // 立即推送，不用 throttle
+  if(window._fbImmediatePush) window._fbImmediatePush('styleSamples', styleSamples);
+  else if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
+  closeModal('styleTagModal');
+  renderStyleTab();
+  showToast(`「${tag||'未分類'}」已存入文風庫 ✓`);
 }
 
 function removeStyleSample(id) {
@@ -1632,18 +1681,20 @@ async function regenDesc(){
   const supplierCopy=document.getElementById('supplierCopy').value.trim();
   const s=getSettings();
   _regenCount++;
-  setStatus('重新產生文案（第'+_regenCount+'版）...',true);
+  const angleNames=['情境','賣點','口感','人氣','故事'];
+  setStatus(`重新產生中（${angleNames[(_regenCount-1)%5]}角度）...`,true);
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock(document.getElementById('prodName')?.value||'')}`;
   // 加入不同版本的指示，每次用不同的角度切入
+  // 每次用不同切入角度
   const angles = [
     '請從商品的使用情境和生活感切入，開頭用一個具體的生活場景。',
     '請從品牌特色或商品的獨特賣點切入，開頭帶出為什麼這個商品值得購買。',
-    '請從商品的口感/質感/效果切入，開頭用感官描述吸引人。',
-    '請從台灣消費者的角度切入，開頭提到這個商品在當地有多受歡迎。',
-    '請用說故事的方式切入，開頭帶出一個讓人有共鳴的情境。',
+    '請從商品的口感/質感/效果切入，用感官描述吸引人，語氣輕鬆有趣。',
+    '請從台灣消費者的角度切入，開頭提到這個商品在當地有多受歡迎或排隊搶購。',
+    '請用說故事的方式切入，開頭帶出一個讓人有共鳴的情境或小故事。',
   ];
   const angleHint = angles[(_regenCount-1) % angles.length];
-  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n${angleHint}\n這是第${_regenCount}次產生，請產出與之前不同風格的版本。請只輸出商品介紹文本身，不要 JSON 或標題。`;
+  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n${angleHint}\n注意：語氣要自然口語，避免太過制式或 AI 腔，字數 300-450 字。請只輸出商品介紹文本身，不要 JSON 或標題。`;
   try{
     const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
