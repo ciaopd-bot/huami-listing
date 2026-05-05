@@ -601,6 +601,11 @@ input.field-error::placeholder{color:#C9826B}
               <input type="file" id="fi" accept="image/*" multiple style="display:none"/>
               <button onclick="openCropTool()" style="margin-top:6px;width:100%;padding:6px;border:1px dashed var(--rose-light);border-radius:7px;background:var(--petal);color:var(--rose-dark);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s">✂️ 廠商拼色圖裁切工具</button>
               <button onclick="openGoogleLens()" style="margin-top:4px;width:100%;padding:6px;border:1px dashed var(--border);border-radius:7px;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s" title="以圖搜圖查市場售價">🔎 Google Lens 以圖搜圖查售價</button>
+              <label style="margin-top:4px;display:block;width:100%;padding:6px;border:1px dashed var(--border);border-radius:7px;background:var(--white);color:var(--ink-mid);font-family:'Noto Sans TC',sans-serif;font-size:12px;cursor:pointer;transition:all 0.15s;text-align:center" title="上傳影片自動截取畫面">
+                📹 上傳影片自動截圖
+                <input type="file" accept="video/*" style="display:none" onchange="extractVideoFrames(this)"/>
+              </label>
+              <div id="videoProgress" style="display:none;margin-top:4px;font-size:11px;color:var(--ink-light);text-align:center"></div>
             </div>
 
             <div class="section">
@@ -611,6 +616,12 @@ input.field-error::placeholder{color:#C9826B}
                 <button class="btn-add-url" onclick="addUrl()">新增</button>
               </div>
               <div class="url-tags" id="urlTags"></div>
+            </div>
+
+            <div class="section">
+              <div class="sec-label">商品關鍵字 <span class="badge badge-blue">選填</span></div>
+              <textarea id="prodKeyword" rows="2" placeholder="每行一個寫法，例如：&#10;LOTTE 杜拜巧克力&#10;롯데 두바이 초콜릿" style="font-size:12px"></textarea>
+              <div style="font-size:11px;color:var(--ink-light);margin-top:3px">可填中文、韓文、日文、英文，AI 都會用繁體中文輸出</div>
             </div>
 
             <div class="section">
@@ -641,12 +652,6 @@ input.field-error::placeholder{color:#C9826B}
                 <label class="toggle"><input type="checkbox" id="noSearch"/><span class="toggle-slider"></span></label>
               </div>
               <div class="notice" id="modeNotice">AI 會參考所有來源，用你的語氣重新寫，字數 300〜500 字。</div>
-            </div>
-
-            <div class="section">
-              <div class="sec-label">商品關鍵字 <span class="badge badge-blue">選填</span></div>
-              <textarea id="prodKeyword" rows="2" placeholder="每行一個寫法，例如：&#10;LOTTE 杜拜巧克力&#10;롯데 두바이 초콜릿" style="font-size:12px"></textarea>
-              <div style="font-size:11px;color:var(--ink-light);margin-top:3px">可填中文、韓文、日文、英文，AI 都會用繁體中文輸出</div>
             </div>
 
             <!-- Pricing Calculator -->
@@ -1253,7 +1258,7 @@ function renderStyleListHTML() {
     <div class="style-sample">
       <div class="style-sample-meta">
         <span>${s.tag?`<span class="badge badge-rose">${s.tag}</span> `:''}${s.date}</span>
-        <div style="display:flex;gap:4px">   <button class="style-sample-rm" onclick="editStyleTag(${s.id})" style="color:var(--blue);border:1px solid var(--blue-border);border-radius:4px;padding:2px 6px">✎ 編輯標籤</button>   <button class="style-sample-rm" onclick="removeStyleSample(${s.id})">✕ 刪除</button> </div>
+        <button class="style-sample-rm" onclick="removeStyleSample(${s.id})">✕ 刪除</button>
       </div>
       <div class="style-sample-text">${s.text.replace(/</g,'&lt;')}</div>
     </div>`).join('');
@@ -1299,8 +1304,6 @@ function removeStyleSample(id) {
   if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);
   renderStyleTab();
 }
-
-function editStyleTag(id) {   if (!isAdmin) { showToast('需要管理員權限'); return; }   const sample = styleSamples.find(s=>s.id===id);   if (!sample) return;   const newTag = prompt('編輯標籤（多個標籤用、分隔）：', sample.tag||'');   if (newTag === null) return;   sample.tag = newTag.trim();   localStorage.setItem(STYLE_KEY, JSON.stringify(styleSamples));   if(window._fb) window._fb.throttledPush('styleSamples', styleSamples);   renderStyleTab();   showToast('標籤已更新 ✓'); }
 
 function exportStyleLib() {
   download('huami文風庫.json', JSON.stringify(styleSamples, null, 2));
@@ -1623,13 +1626,24 @@ weight_g：根據商品包裝標示或同類常見重量推估，無法判斷填
   btn.disabled=false;
 }
 
+let _regenCount = 0; // 記錄重新產生次數，確保每次不同
 async function regenDesc(){
   const name=document.getElementById('prodName').value.trim();
   const supplierCopy=document.getElementById('supplierCopy').value.trim();
   const s=getSettings();
-  setStatus('重新產生文案...',true);
+  _regenCount++;
+  setStatus('重新產生文案（第'+_regenCount+'版）...',true);
   const modeInstruction=currentMode==='direct'?'直接沿用廠商文案，只做格式調整。':`MIX 改寫：${STYLE_PROMPT}${getStyleExamplesBlock(document.getElementById('prodName')?.value||'')}`;
-  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n請只輸出商品介紹文本身，不要 JSON 或標題。`;
+  // 加入不同版本的指示，每次用不同的角度切入
+  const angles = [
+    '請從商品的使用情境和生活感切入，開頭用一個具體的生活場景。',
+    '請從品牌特色或商品的獨特賣點切入，開頭帶出為什麼這個商品值得購買。',
+    '請從商品的口感/質感/效果切入，開頭用感官描述吸引人。',
+    '請從台灣消費者的角度切入，開頭提到這個商品在當地有多受歡迎。',
+    '請用說故事的方式切入，開頭帶出一個讓人有共鳴的情境。',
+  ];
+  const angleHint = angles[(_regenCount-1) % angles.length];
+  const prompt=`商品名稱：${name}\n${supplierCopy?`廠商文案：\n${supplierCopy}\n`:''}\n${modeInstruction}\n${angleHint}\n這是第${_regenCount}次產生，請產出與之前不同風格的版本。請只輸出商品介紹文本身，不要 JSON 或標題。`;
   try{
     const res=await fetch('https://huami-proxy.ciao-pd.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
@@ -3087,6 +3101,113 @@ async function queryMarketPrice() {
 
   btn.textContent = '🔍 查市場售價';
   btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════
+// VIDEO FRAME EXTRACTION
+// ══════════════════════════════════════════════
+function extractVideoFrames(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const MAX_FRAMES = 5;
+  const MAX_SIZE_MB = 150;
+  const progressEl = document.getElementById('videoProgress');
+
+  if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    showToast(`影片太大，請上傳 ${MAX_SIZE_MB}MB 以內的影片`);
+    input.value = '';
+    return;
+  }
+
+  progressEl.style.display = 'block';
+  progressEl.textContent = '📹 載入影片中...';
+
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  const url = URL.createObjectURL(file);
+  video.src = url;
+
+  video.addEventListener('loadedmetadata', () => {
+    const duration = video.duration;
+    if (duration === Infinity || isNaN(duration)) {
+      showToast('無法讀取影片長度，請換一個影片試試');
+      progressEl.style.display = 'none';
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // 均勻分布截圖時間點（避開開頭和結尾各 5%）
+    const margin = duration * 0.05;
+    const usable = duration - margin * 2;
+    const frameCount = Math.min(MAX_FRAMES, Math.max(1, Math.floor(duration / 3)));
+    const times = Array.from({length: frameCount}, (_, i) =>
+      margin + (usable / (frameCount - 1 || 1)) * i
+    );
+
+    let captured = 0;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const captureFrame = (timeIdx) => {
+      if (timeIdx >= times.length) {
+        progressEl.textContent = `✓ 已截取 ${captured} 張畫面`;
+        setTimeout(() => { progressEl.style.display = 'none'; }, 2000);
+        URL.revokeObjectURL(url);
+        input.value = '';
+        renderThumbs();
+        showToast(`已從影片截取 ${captured} 張畫面`);
+        return;
+      }
+
+      progressEl.textContent = `📸 截取第 ${timeIdx + 1}/${times.length} 張...`;
+      video.currentTime = times[timeIdx];
+    };
+
+    video.addEventListener('seeked', function onSeeked() {
+      const idx = times.indexOf(video.currentTime) >= 0
+        ? times.indexOf(video.currentTime)
+        : captured;
+
+      // 設定 canvas 尺寸（限制最大寬度避免太大）
+      const MAX_W = 1200;
+      const ratio = Math.min(MAX_W / video.videoWidth, 1);
+      canvas.width = Math.round(video.videoWidth * ratio);
+      canvas.height = Math.round(video.videoHeight * ratio);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const b64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      // 加入照片清單
+      if (imgs.length < 10) {
+        imgs.push({ b64, file: null });
+        captured++;
+      }
+
+      const nextIdx = captured;
+      if (nextIdx < times.length && imgs.length < 10) {
+        video.currentTime = times[nextIdx];
+      } else {
+        video.removeEventListener('seeked', onSeeked);
+        progressEl.textContent = `✓ 已截取 ${captured} 張畫面`;
+        setTimeout(() => { progressEl.style.display = 'none'; }, 2000);
+        URL.revokeObjectURL(url);
+        input.value = '';
+        renderThumbs();
+        showToast(`已從影片截取 ${captured} 張畫面`);
+      }
+    });
+
+    // 開始截第一幀
+    video.currentTime = times[0];
+  });
+
+  video.addEventListener('error', () => {
+    showToast('影片載入失敗，請試試其他格式（MP4 最佳）');
+    progressEl.style.display = 'none';
+    URL.revokeObjectURL(url);
+    input.value = '';
+  });
 }
 
 // ══════════════════════════════════════════════
